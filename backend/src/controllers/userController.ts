@@ -398,7 +398,7 @@ export const deleteUser = async (req: AuthRequest, res: Response): Promise<void>
  * @route   GET /api/users/tech-leads
  * @access  Private/Admin
  */
-export const getTechLeads = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getTechLeads = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const techLeads = await User.findAll({
       where: { role: USER_ROLES.TECH_LEAD },
@@ -424,7 +424,7 @@ export const getTechLeads = async (req: AuthRequest, res: Response): Promise<voi
  * @route   GET /api/users/managers
  * @access  Private/Admin
  */
-export const getManagers = async (req: AuthRequest, res: Response): Promise<void> => {
+export const getManagers = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     const managers = await User.findAll({
       where: { role: USER_ROLES.MANAGER },

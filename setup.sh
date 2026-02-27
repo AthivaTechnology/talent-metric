@@ -139,12 +139,29 @@ setup_database() {
                 exit 1
             fi
 
+            print_info "Cleaning up any existing MySQL containers and volumes..."
+            docker-compose down -v 2>/dev/null || true
+            docker rm -f talent_metric_db 2>/dev/null || true
+            print_success "Cleanup complete"
+
             print_info "Starting MySQL with Docker..."
             docker-compose up -d
             print_success "Docker MySQL container started"
 
-            print_info "Waiting 30 seconds for MySQL to initialize..."
-            sleep 30
+            print_info "Waiting for MySQL to be ready..."
+            for i in {1..60}; do
+                if docker exec talent_metric_db mysqladmin ping -h localhost -u root -ppassword --silent 2>/dev/null; then
+                    print_success "MySQL is ready!"
+                    break
+                fi
+                if [ $i -eq 60 ]; then
+                    print_error "MySQL failed to start within 60 seconds. Check logs with: docker logs talent_metric_db"
+                    exit 1
+                fi
+                echo -n "."
+                sleep 1
+            done
+            echo ""
             ;;
         2)
             read -p "Enter MySQL host (default: localhost): " db_host

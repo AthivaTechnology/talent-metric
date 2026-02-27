@@ -36,7 +36,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
 
   // Method to exclude password from JSON
   public toJSON(): Partial<UserAttributes> {
-    const values = { ...this.get() };
+    const values = { ...this.get() } as Partial<UserAttributes>;
     delete values.password;
     return values;
   }

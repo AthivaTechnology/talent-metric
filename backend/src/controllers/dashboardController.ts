@@ -305,8 +305,8 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
     };
 
     appraisals.forEach(appraisal => {
-      if (appraisal.ratings) {
-        appraisal.ratings.forEach(rating => {
+      if ((appraisal as any).ratings) {
+        (appraisal as any).ratings.forEach((rating: any) => {
           if (ratingsByCategory[rating.category]) {
             ratingsByCategory[rating.category].push(rating.rating);
           }

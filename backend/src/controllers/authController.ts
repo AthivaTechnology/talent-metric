@@ -137,7 +137,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
  * @route   POST /api/auth/logout
  * @access  Private
  */
-export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+export const logout = async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
     // In JWT-based auth, logout is typically handled client-side by removing the token
     // This endpoint is just for consistency and can be used for logging purposes

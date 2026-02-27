@@ -19,7 +19,7 @@ const seedDatabase = async () => {
     console.log('👥 Seeding users...');
 
     // Create Admin
-    const admin = await User.create({
+    await User.create({
       name: 'System Admin',
       email: 'admin@company.com',
       password: 'Admin@123',

@@ -20,7 +20,7 @@ const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
  */
 export const generateToken = (payload: JwtPayload): string => {
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRE
+    expiresIn: JWT_EXPIRE as any
   });
 };
 

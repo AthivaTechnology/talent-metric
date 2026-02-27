@@ -62,8 +62,7 @@ Response.init(
     },
     answer: {
       type: DataTypes.TEXT('long'),
-      allowNull: false,
-      defaultValue: ''
+      allowNull: false
     }
   },
   {

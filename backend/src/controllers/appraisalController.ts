@@ -467,7 +467,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       }
 
       // Validate all responses are filled
-      const emptyResponses = appraisal.responses?.filter(r => !r.answer || r.answer.trim().length === 0);
+      const emptyResponses = (appraisal as any).responses?.filter((r: any) => !r.answer || r.answer.trim().length === 0);
       if (emptyResponses && emptyResponses.length > 0) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
@@ -477,7 +477,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       }
 
       // Validate all ratings are provided
-      if (!appraisal.ratings || appraisal.ratings.length < 5) {
+      if (!(appraisal as any).ratings || (appraisal as any).ratings.length < 5) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           message: 'Please provide all self-ratings before submitting'
@@ -576,7 +576,7 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
 
     // Determine stage based on user role and appraisal status
     let stage = '';
-    const user = appraisal.user;
+    const user = (appraisal as any).user;
 
     if (req.user.role === USER_ROLES.TECH_LEAD && user && user.techLeadId === req.user.id) {
       stage = 'tech_lead_review';

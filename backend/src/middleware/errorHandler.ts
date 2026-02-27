@@ -19,9 +19,9 @@ export class AppError extends Error {
 // Error handler middleware
 export const errorHandler = (
   err: Error | AppError,
-  req: Request,
+  _req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   let error = { ...err };
   error.message = err.message;
@@ -80,7 +80,7 @@ export const asyncHandler = (fn: Function) => {
 };
 
 // Not found handler
-export const notFound = (req: Request, res: Response, next: NextFunction): void => {
+export const notFound = (req: Request, _res: Response, next: NextFunction): void => {
   const error = new AppError(`Route not found - ${req.originalUrl}`, HTTP_STATUS.NOT_FOUND);
   next(error);
 };
