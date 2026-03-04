@@ -188,7 +188,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: backend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:6845400157d93c0c155e68921eeb0036470517e9
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:05b39ef28a1e6d20fb770e37294b15c66ce77549
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false # Node apps usually need some write access, but keep it high level
@@ -262,7 +262,7 @@ spec:
         runAsUser: 101 # Nginx user
       containers:
       - name: frontend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:6845400157d93c0c155e68921eeb0036470517e9
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:05b39ef28a1e6d20fb770e37294b15c66ce77549
         securityContext:
           allowPrivilegeEscalation: false
         ports:
