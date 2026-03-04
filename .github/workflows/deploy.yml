@@ -11,9 +11,9 @@ permissions:
   contents: write
 
 env:
-  AWS_REGION: us-east-1 
-  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  IAM_ROLE_NAME: ${{ secrets.IAM_ROLE_NAME }}          
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: 382625484581
+  IAM_ROLE_NAME: Github-acition-oicd            
   BACKEND_REPOSITORY: talent-metric-backend
   FRONTEND_REPOSITORY: talent-metric-frontend
 
