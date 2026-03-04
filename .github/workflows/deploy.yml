@@ -101,6 +101,7 @@ jobs:
           sed -i "s/<YOUR_ACCOUNT_ID>/${{ secrets.AWS_ACCOUNT_ID }}/g" k8s/dev-setup.yaml
           sed -i "s/<YOUR_REGION>/${{ env.AWS_REGION }}/g" k8s/dev-setup.yaml
 
+
       - name: Commit & push updated manifest
         env:
           TAG: ${{ needs.build.outputs.image_tag }}
@@ -117,11 +118,6 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE_NAME }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig & Deploy
-        run: |
-          aws eks update-kubeconfig --name talent-metric-cluster --region ${{ env.AWS_REGION }}
-          kubectl apply -f k8s/dev-setup.yaml
 
   deploy_prod:
     name: "Deploy → talent-metric-prod [approval required]"
@@ -164,8 +160,3 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.IAM_ROLE_NAME }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Update kubeconfig & Deploy
-        run: |
-          aws eks update-kubeconfig --name talent-metric-cluster --region ${{ env.AWS_REGION }}
-          kubectl apply -f k8s/prod-setup.yaml
