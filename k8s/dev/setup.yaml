@@ -242,7 +242,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: backend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:88ec5eab38da1e641179900d7d839602691c16a5
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:8c41c2fb482197dbd6ce17decbf6fd50c31f3fed
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
@@ -314,7 +314,7 @@ spec:
           name: nginx-config
       containers:
       - name: frontend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:88ec5eab38da1e641179900d7d839602691c16a5
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:8c41c2fb482197dbd6ce17decbf6fd50c31f3fed
         securityContext:
           allowPrivilegeEscalation: false
         ports:
