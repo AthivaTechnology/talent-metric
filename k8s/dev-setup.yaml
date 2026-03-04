@@ -9,7 +9,7 @@ metadata:
   name: talent-metric-sa
   namespace: talent-metric-dev
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::<YOUR_ACCOUNT_ID>:role/talent-metric-dev-role
+    eks.amazonaws.com/role-arn: arn:aws:iam:::role/talent-metric-dev-role
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -188,7 +188,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: backend
-        image: <YOUR_ACCOUNT_ID>.dkr.ecr.<YOUR_REGION>.amazonaws.com/talent-metric-backend:latest
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:22df38ea17e89d01f8d26ab0ecef3ef99dda621b
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false # Node apps usually need some write access, but keep it high level
@@ -262,7 +262,7 @@ spec:
         runAsUser: 101 # Nginx user
       containers:
       - name: frontend
-        image: <YOUR_ACCOUNT_ID>.dkr.ecr.<YOUR_REGION>.amazonaws.com/talent-metric-frontend:latest
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:22df38ea17e89d01f8d26ab0ecef3ef99dda621b
         securityContext:
           allowPrivilegeEscalation: false
         ports:
