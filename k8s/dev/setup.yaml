@@ -9,7 +9,7 @@ metadata:
   name: talent-metric-sa
   namespace: talent-metric-dev
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam:::role/talent-metric-dev-role
+    eks.amazonaws.com/role-arn: arn:aws:iam::382625484581:role/talent-metric-dev-role
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -24,30 +24,41 @@ data:
   DB_USER: "talent_user"
   JWT_EXPIRE: "7d"
 ---
-apiVersion: secrets-store.csi.x-k8s.io/v1
-kind: SecretProviderClass
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
 metadata:
-  name: talent-metric-secrets
+  name: talent-metric-secret-store
   namespace: talent-metric-dev
 spec:
-  provider: aws
-  parameters:
-    objects: |
-      - objectName: "talent-metric/dev/secrets"
-        objectType: "secretsmanager"
-        jmesPath:
-          - path: "DB_PASSWORD"
-            objectAlias: "DB_PASSWORD"
-          - path: "JWT_SECRET"
-            objectAlias: "JWT_SECRET"
-  secretObjects:
-    - secretName: talent-metric-app-secrets
-      type: Opaque
-      data:
-        - objectName: DB_PASSWORD
-          key: DB_PASSWORD
-        - objectName: JWT_SECRET
-          key: JWT_SECRET
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: talent-metric-sa
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: talent-metric-external-secret
+  namespace: talent-metric-dev
+spec:
+  secretStoreRef:
+    name: talent-metric-secret-store
+    kind: SecretStore
+  target:
+    name: talent-metric-app-secrets
+  data:
+  - secretKey: DB_PASSWORD
+    remoteRef:
+      key: talent-metric/dev/secrets
+      property: DB_PASSWORD
+  - secretKey: JWT_SECRET
+    remoteRef:
+      key: talent-metric/dev/secrets
+      property: JWT_SECRET
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -218,17 +229,6 @@ spec:
             port: 5000
           initialDelaySeconds: 5
           periodSeconds: 10
-        volumeMounts:
-        - name: secrets-store-inline
-          mountPath: "/mnt/secrets-store"
-          readOnly: true
-      volumes:
-        - name: secrets-store-inline
-          csi:
-            driver: secrets-store.csi.k8s.io
-            readOnly: true
-            volumeAttributes:
-              secretProviderClass: "talent-metric-secrets"
 ---
 apiVersion: v1
 kind: Service
