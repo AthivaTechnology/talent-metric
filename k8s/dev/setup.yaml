@@ -19,6 +19,29 @@ data:
   DB_USER: "talent_user"
   JWT_EXPIRE: "7d"
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: talent-metric-dev
+data:
+  default.conf: |
+    server {
+        listen 8080;
+        server_name localhost;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html index.htm;
+            try_files $uri $uri/ /index.html;
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+            root /usr/share/nginx/html;
+        }
+    }
+---
 apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
@@ -239,13 +262,13 @@ spec:
             memory: "256Mi"
         livenessProbe:
           httpGet:
-            path: /api/health
+            path: /health # Assuming a health check endpoint exists
             port: 5000
           initialDelaySeconds: 15
           periodSeconds: 20
         readinessProbe:
           httpGet:
-            path: /api/health
+            path: /health
             port: 5000
           initialDelaySeconds: 5
           periodSeconds: 10
@@ -280,13 +303,22 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
+        fsGroup: 101
+      volumes:
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: nginx-conf
+        configMap:
+          name: nginx-config
       containers:
       - name: frontend
         image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:d7ded97b9f93ec46f955657432a86ce0cdfcc426
         securityContext:
           allowPrivilegeEscalation: false
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         resources:
           limits:
             cpu: "200m"
@@ -294,12 +326,26 @@ spec:
           requests:
             cpu: "100m"
             memory: "64Mi"
+        volumeMounts:
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
         livenessProbe:
           httpGet:
             path: /
-            port: 80
+            port: 8080
           initialDelaySeconds: 10
           periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service
@@ -311,7 +357,8 @@ spec:
     app: frontend
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
+  type: ClusterIP
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -323,7 +370,7 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    alb.ingress.kubernetes.io/healthcheck-path: /
 spec:
   ingressClassName: alb
   rules:
