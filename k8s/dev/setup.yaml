@@ -24,7 +24,7 @@ data:
   DB_USER: "talent_user"
   JWT_EXPIRE: "7d"
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata:
   name: talent-metric-secret-store
@@ -39,7 +39,7 @@ spec:
           serviceAccountRef:
             name: talent-metric-sa
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: talent-metric-external-secret
