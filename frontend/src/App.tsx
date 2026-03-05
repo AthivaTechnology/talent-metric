@@ -13,6 +13,7 @@ import UsersPage from '@pages/UsersPage';
 import ProfilePage from '@pages/ProfilePage';
 import TeamPage from '@pages/TeamPage';
 import AnalyticsPage from '@pages/AnalyticsPage';
+import UserManualPage from '@pages/UserManualPage';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -63,6 +64,7 @@ export default function App() {
           }
         />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/user-manual" element={<UserManualPage />} />
       </Route>
 
       {/* Catch-all */}

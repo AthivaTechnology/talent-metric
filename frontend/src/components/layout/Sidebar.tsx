@@ -6,6 +6,7 @@ import {
   UsersIcon,
   UserGroupIcon,
   ChartBarIcon,
+  BookOpenIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@context/AuthContext';
 import type { UserRole } from '@/types/index';
@@ -45,6 +46,11 @@ const NAV_ITEMS: NavItem[] = [
     to: '/users',
     icon: UsersIcon,
     roles: ['admin'],
+  },
+  {
+    label: 'User Manual',
+    to: '/user-manual',
+    icon: BookOpenIcon,
   },
 ];
 
