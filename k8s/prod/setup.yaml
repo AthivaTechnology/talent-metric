@@ -9,7 +9,7 @@ metadata:
   name: talent-metric-sa
   namespace: talent-metric-prod
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::<YOUR_ACCOUNT_ID>:role/talent-metric-prod-role
+    eks.amazonaws.com/role-arn: arn:aws:iam:::role/talent-metric-prod-role
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -200,7 +200,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: backend
-        image: <YOUR_ACCOUNT_ID>.dkr.ecr.<YOUR_REGION>.amazonaws.com/talent-metric-backend:latest
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:450e633c0fb7cef6b1d4da6f2c5d0a73fb25c285
         securityContext:
           allowPrivilegeEscalation: false
         ports:
@@ -285,7 +285,7 @@ spec:
         runAsUser: 101
       containers:
       - name: frontend
-        image: <YOUR_ACCOUNT_ID>.dkr.ecr.<YOUR_REGION>.amazonaws.com/talent-metric-frontend:latest
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:450e633c0fb7cef6b1d4da6f2c5d0a73fb25c285
         securityContext:
           allowPrivilegeEscalation: false
         ports:
