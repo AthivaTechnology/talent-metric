@@ -200,7 +200,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: backend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:450e633c0fb7cef6b1d4da6f2c5d0a73fb25c285
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-backend:f194d0b19b9cada92073c3c4489f59a211942460
         securityContext:
           allowPrivilegeEscalation: false
         ports:
@@ -285,7 +285,7 @@ spec:
         runAsUser: 101
       containers:
       - name: frontend
-        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:450e633c0fb7cef6b1d4da6f2c5d0a73fb25c285
+        image: 382625484581.dkr.ecr.us-east-1.amazonaws.com/talent-metric-frontend:f194d0b19b9cada92073c3c4489f59a211942460
         securityContext:
           allowPrivilegeEscalation: false
         ports:
