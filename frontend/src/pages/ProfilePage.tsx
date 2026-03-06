@@ -13,6 +13,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   manager: 'bg-purple-100 text-purple-700',
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
+  tester: 'bg-yellow-100 text-yellow-700',
 };
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
@@ -20,6 +21,7 @@ const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   manager: 'Review and finalize appraisals for your team members.',
   tech_lead: 'Review appraisals for your technical team members.',
   developer: 'Submit and track your own performance appraisals.',
+  tester: 'Submit and track your own performance appraisals.',
 };
 
 export default function ProfilePage() {
