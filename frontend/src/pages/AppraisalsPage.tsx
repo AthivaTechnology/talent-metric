@@ -27,8 +27,7 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear(
 const ROLES_THAT_CAN_CREATE: UserRole[] = ['admin'];
 
 const APPRAISABLE_ROLES: { value: string; label: string }[] = [
-  { value: 'developer', label: 'Developer' },
-  { value: 'tester', label: 'Tester' },
+  { value: 'developer', label: 'Developer / Tester' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
 ];
@@ -255,6 +254,16 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
     () => userService.getUsers({ role: selectedRole, limit: 100 })
   );
 
+  const { data: testerData } = useQuery(
+    ['users', { role: 'tester' }],
+    () => userService.getUsers({ role: 'tester', limit: 100 }),
+    { enabled: selectedRole === 'developer' }
+  );
+
+  const employeeOptions = selectedRole === 'developer'
+    ? [...(userData?.users ?? []), ...(testerData?.users ?? [])]
+    : (userData?.users ?? []);
+
   const mutation = useMutation(
     () => appraisalService.createAppraisal({ userId, year, deadline: deadline || undefined }),
     {
@@ -317,7 +326,7 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
                   required
                 >
                   <option value="">Select employee...</option>
-                  {userData?.users.map((u) => (
+                  {employeeOptions.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} — {u.email}
                     </option>
