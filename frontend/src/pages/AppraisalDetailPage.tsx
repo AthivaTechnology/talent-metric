@@ -21,15 +21,9 @@ import LoadingSpinner from '@components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import type { RatingCategory, QuestionSection, Comment } from '@/types/index';
+import { getRatingConfig } from '@/types/index';
 import clsx from 'clsx';
 
-const RATING_CATEGORIES: { key: RatingCategory; label: string; desc: string }[] = [
-  { key: 'technical_skills', label: 'Technical Skills', desc: 'Proficiency in relevant technologies' },
-  { key: 'code_quality', label: 'Code Quality', desc: 'Clean, maintainable, well-tested code' },
-  { key: 'ownership', label: 'Ownership', desc: 'Takes responsibility and drives outcomes' },
-  { key: 'problem_solving', label: 'Problem Solving', desc: 'Analytical thinking and creativity' },
-  { key: 'communication', label: 'Communication', desc: 'Clear, concise, collaborative communication' },
-];
 
 // Tiptap toolbar
 function EditorToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
@@ -172,13 +166,7 @@ export default function AppraisalDetailPage() {
   const queryClient = useQueryClient();
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [ratings, setRatings] = useState<Record<RatingCategory, number>>({
-    technical_skills: 0,
-    code_quality: 0,
-    ownership: 0,
-    problem_solving: 0,
-    communication: 0,
-  });
+  const [ratings, setRatings] = useState<Record<string, number>>({});
   const [newComment, setNewComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
@@ -189,9 +177,12 @@ export default function AppraisalDetailPage() {
     { enabled: !!id }
   );
 
-  const questionsQuery = useQuery(['questions'], questionService.getQuestions, {
-    staleTime: 300_000,
-  });
+  const appraiseeRole = appraisalQuery.data?.user?.role;
+  const questionsQuery = useQuery(
+    ['questions', appraiseeRole],
+    () => questionService.getQuestions(appraiseeRole),
+    { staleTime: 300_000, enabled: !!appraiseeRole }
+  );
 
   const commentsQuery = useQuery(
     ['appraisal-comments', id],
@@ -212,7 +203,7 @@ export default function AppraisalDetailPage() {
     });
     setAnswers(answerMap);
 
-    const ratingMap = { ...ratings };
+    const ratingMap: Record<string, number> = {};
     appraisal.ratings.forEach((r) => {
       ratingMap[r.category] = r.rating;
     });
@@ -229,7 +220,7 @@ export default function AppraisalDetailPage() {
         })),
         ratings: Object.entries(ratings).map(([category, rating]) => ({
           category: category as RatingCategory,
-          rating,
+          rating: rating as number,
         })),
       }),
     {
@@ -274,7 +265,7 @@ export default function AppraisalDetailPage() {
     setAnswers((prev) => ({ ...prev, [questionId]: html }));
   };
 
-  const handleRatingChange = (category: RatingCategory, rating: number) => {
+  const handleRatingChange = (category: string, rating: number) => {
     setRatings((prev) => ({ ...prev, [category]: rating }));
   };
 
@@ -296,11 +287,11 @@ export default function AppraisalDetailPage() {
 
   const isDraft = appraisal.status === 'draft';
   const isCompleted = appraisal.status === 'completed';
-  const isDeveloper = user?.role === 'developer';
-  const canEdit = isDeveloper && isDraft;
+  const isOwnAppraisal = appraisal.userId === String(user?.id);
+  const canEdit = isOwnAppraisal && isDraft;
   const canAdvance =
     !isCompleted &&
-    ((isDeveloper && isDraft) ||
+    ((isOwnAppraisal && isDraft) ||
       (user?.role === 'tech_lead' &&
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
       (user?.role === 'manager' && appraisal.status === 'manager_review') ||
@@ -408,14 +399,14 @@ export default function AppraisalDetailPage() {
               <p className="text-sm text-slate-500 mt-0.5">Rate yourself honestly on each dimension (1–5)</p>
             </div>
             <div className="card-body divide-y divide-slate-100">
-              {RATING_CATEGORIES.map((cat) => (
+              {getRatingConfig(appraisal.user?.role).map((cat) => (
                 <div key={cat.key} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
                   <div>
                     <p className="text-sm font-medium text-slate-900">{cat.label}</p>
                     <p className="text-xs text-slate-500">{cat.desc}</p>
                   </div>
                   <StarRating
-                    value={ratings[cat.key]}
+                    value={ratings[cat.key] ?? 0}
                     onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
                     readonly={!canEdit}
                     size="md"
@@ -509,15 +500,16 @@ export default function AppraisalDetailPage() {
             </div>
           </div>
 
-          {/* Developer info */}
-          {appraisal.user && !isDeveloper && (
+          {/* Appraisee info */}
+          {appraisal.user && !isOwnAppraisal && (
             <div className="card">
               <div className="card-header">
-                <h3 className="text-sm font-semibold text-slate-900">Developer</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Appraisee</h3>
               </div>
               <div className="card-body space-y-1">
                 <p className="text-sm font-medium text-slate-900">{appraisal.user.name}</p>
                 <p className="text-xs text-slate-500">{appraisal.user.email}</p>
+                <p className="text-xs text-slate-400 capitalize">{appraisal.user.role?.replace('_', ' ')}</p>
               </div>
             </div>
           )}
@@ -541,7 +533,7 @@ export default function AppraisalDetailPage() {
                 </div>
               )}
 
-              {!isCompleted && !isDeveloper && (
+              {!isCompleted && !isOwnAppraisal && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <textarea
                     value={newComment}

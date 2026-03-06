@@ -40,25 +40,25 @@ export const getAllAppraisals = async (req: AuthRequest, res: Response): Promise
     }
 
     // Role-based filtering
-    if (req.user.role === USER_ROLES.DEVELOPER) {
-      // Developers can only see their own appraisals
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
+      // Developers and testers can only see their own appraisals
       whereClause.userId = req.user.id;
     } else if (req.user.role === USER_ROLES.TECH_LEAD) {
-      // Tech leads can see appraisals of their team members
+      // Tech leads can see their own appraisal + their team members' appraisals
       const teamMembers = await User.findAll({
         where: { techLeadId: req.user.id },
         attributes: ['id']
       });
       const teamMemberIds = teamMembers.map(member => member.id);
-      whereClause.userId = { [Op.in]: teamMemberIds };
+      whereClause.userId = { [Op.in]: [req.user.id, ...teamMemberIds] };
     } else if (req.user.role === USER_ROLES.MANAGER) {
-      // Managers can see appraisals of their reportees
+      // Managers can see their own appraisal + their reportees' appraisals
       const reportees = await User.findAll({
         where: { managerId: req.user.id },
         attributes: ['id']
       });
       const reporteeIds = reportees.map(reportee => reportee.id);
-      whereClause.userId = { [Op.in]: reporteeIds };
+      whereClause.userId = { [Op.in]: [req.user.id, ...reporteeIds] };
     }
     // Admins can see all appraisals (no additional filtering)
 
@@ -261,8 +261,10 @@ export const createAppraisal = async (req: AuthRequest, res: Response): Promise<
       deadline: deadline || null
     });
 
-    // Initialize empty responses for all questions
-    const questions = await Question.findAll();
+    // Initialize empty responses for questions applicable to this user's role
+    const questions = await Question.findAll({
+      where: { applicableRole: user.role }
+    });
     const responses = questions.map(question => ({
       appraisalId: appraisal.id,
       questionId: question.id,
@@ -457,7 +459,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
 
     // Check permissions based on current status
     if (currentStatus === APPRAISAL_STATUS.DRAFT) {
-      // Developer submitting
+      // Only the appraisee can submit their own appraisal
       if (appraisal.userId !== req.user.id) {
         res.status(HTTP_STATUS.FORBIDDEN).json({
           success: false,
@@ -476,7 +478,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
         return;
       }
 
-      // Validate all ratings are provided
+      // Validate all role-specific ratings are provided (each role has 5 categories)
       if (!(appraisal as any).ratings || (appraisal as any).ratings.length < 5) {
         res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
@@ -584,6 +586,15 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       stage = 'manager_review';
     } else if (req.user.role === USER_ROLES.ADMIN) {
       stage = appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW ? 'manager_review' : 'tech_lead_review';
+    } else if (
+      // Tech leads reviewing their own appraisal as if at manager_review stage
+      req.user.role === USER_ROLES.TECH_LEAD && appraisal.userId === req.user.id
+    ) {
+      stage = 'tech_lead_review';
+    } else if (
+      req.user.role === USER_ROLES.MANAGER && appraisal.userId === req.user.id
+    ) {
+      stage = 'manager_review';
     } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,

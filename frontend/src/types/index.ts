@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer';
+export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester';
 
 export type AppraisalStatus =
   | 'draft'
@@ -12,7 +12,55 @@ export type RatingCategory =
   | 'code_quality'
   | 'ownership'
   | 'problem_solving'
-  | 'communication';
+  | 'communication'
+  | 'testing_skills'
+  | 'test_coverage'
+  | 'technical_leadership'
+  | 'team_management'
+  | 'team_leadership'
+  | 'people_development'
+  | 'strategic_thinking';
+
+export interface RatingCategoryConfig {
+  key: RatingCategory;
+  label: string;
+  desc: string;
+}
+
+export const ROLE_RATING_CONFIGS: Record<string, RatingCategoryConfig[]> = {
+  developer: [
+    { key: 'technical_skills', label: 'Technical Skills', desc: 'Proficiency in relevant technologies' },
+    { key: 'code_quality', label: 'Code Quality', desc: 'Clean, maintainable, well-tested code' },
+    { key: 'ownership', label: 'Ownership', desc: 'Takes responsibility and drives outcomes' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Analytical thinking and creativity' },
+    { key: 'communication', label: 'Communication', desc: 'Clear, concise, collaborative communication' }
+  ],
+  tester: [
+    { key: 'testing_skills', label: 'Testing Skills', desc: 'Proficiency in testing methodologies and tools' },
+    { key: 'test_coverage', label: 'Test Coverage & Quality', desc: 'Thoroughness and quality of test suites' },
+    { key: 'ownership', label: 'Ownership', desc: 'Takes responsibility for product quality' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Analytical thinking in defect investigation' },
+    { key: 'communication', label: 'Communication', desc: 'Clear bug reporting and team collaboration' }
+  ],
+  tech_lead: [
+    { key: 'technical_leadership', label: 'Technical Leadership', desc: 'Guiding technical direction and standards' },
+    { key: 'team_management', label: 'Team Management', desc: 'Enabling team delivery and unblocking' },
+    { key: 'ownership', label: 'Ownership', desc: 'Taking responsibility for team outcomes' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Solving complex technical and team challenges' },
+    { key: 'communication', label: 'Communication', desc: 'Communicating across stakeholders effectively' }
+  ],
+  manager: [
+    { key: 'team_leadership', label: 'Team Leadership', desc: 'Inspiring and developing the team' },
+    { key: 'people_development', label: 'People Development', desc: 'Growing team members\' skills and careers' },
+    { key: 'strategic_thinking', label: 'Strategic Thinking', desc: 'Planning and aligning with business goals' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Resolving conflicts and organizational challenges' },
+    { key: 'communication', label: 'Communication', desc: 'Stakeholder management and team communication' }
+  ]
+};
+
+export function getRatingConfig(role?: string): RatingCategoryConfig[] {
+  return ROLE_RATING_CONFIGS[role ?? 'developer'] ?? ROLE_RATING_CONFIGS['developer'];
+}
 
 export interface User {
   id: number;

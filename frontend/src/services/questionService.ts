@@ -2,8 +2,8 @@ import api from './api';
 import type { QuestionSection, Question } from '@/types/index';
 
 export const questionService = {
-  async getQuestions(): Promise<QuestionSection[]> {
-    const res = await api.get('/questions');
+  async getQuestions(role?: string): Promise<QuestionSection[]> {
+    const res = await api.get('/questions', { params: role ? { role } : undefined });
     return res.data.data;
   },
 
