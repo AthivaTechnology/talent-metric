@@ -1,6 +1,6 @@
 import sequelize from '../config/database';
 import { User, Question } from '../models';
-import { FLAT_QUESTIONS, USER_ROLES } from '../config/constants';
+import { ALL_FLAT_QUESTIONS, USER_ROLES } from '../config/constants';
 
 const seedDatabase = async () => {
   try {
@@ -10,10 +10,10 @@ const seedDatabase = async () => {
     await sequelize.sync({ force: true });
     console.log('✅ Database tables created');
 
-    // Seed Questions
+    // Seed Questions (all roles)
     console.log('📝 Seeding questions...');
-    await Question.bulkCreate(FLAT_QUESTIONS);
-    console.log(`✅ Created ${FLAT_QUESTIONS.length} questions`);
+    await Question.bulkCreate(ALL_FLAT_QUESTIONS);
+    console.log(`✅ Created ${ALL_FLAT_QUESTIONS.length} questions across all roles`);
 
     // Seed Users
     console.log('👥 Seeding users...');
@@ -126,35 +126,42 @@ const seedDatabase = async () => {
         role: USER_ROLES.DEVELOPER,
         techLeadId: techLead3.id,
         managerId: manager2.id
-      },
+      }
+    ];
+
+    await User.bulkCreate(developers);
+    console.log(`✅ Created ${developers.length} developers`);
+
+    // Create Testers
+    const testers = [
       {
         name: 'Sophia Thomas',
         email: 'sophia.thomas@company.com',
         password: 'Password@123',
-        role: USER_ROLES.DEVELOPER,
-        techLeadId: techLead3.id,
-        managerId: manager2.id
+        role: USER_ROLES.TESTER,
+        techLeadId: techLead1.id,
+        managerId: manager1.id
       },
       {
         name: 'Liam Moore',
         email: 'liam.moore@company.com',
         password: 'Password@123',
-        role: USER_ROLES.DEVELOPER,
-        techLeadId: techLead1.id,
+        role: USER_ROLES.TESTER,
+        techLeadId: techLead2.id,
         managerId: manager1.id
       },
       {
         name: 'Ava Jackson',
         email: 'ava.jackson@company.com',
         password: 'Password@123',
-        role: USER_ROLES.DEVELOPER,
-        techLeadId: techLead2.id,
-        managerId: manager1.id
+        role: USER_ROLES.TESTER,
+        techLeadId: techLead3.id,
+        managerId: manager2.id
       }
     ];
 
-    await User.bulkCreate(developers);
-    console.log(`✅ Created ${developers.length} developers`);
+    await User.bulkCreate(testers);
+    console.log(`✅ Created ${testers.length} testers`);
 
     console.log('\n🎉 Database seeding completed successfully!\n');
     console.log('📋 Summary:');
@@ -162,13 +169,17 @@ const seedDatabase = async () => {
     console.log(`   - Managers: 2`);
     console.log(`   - Tech Leads: 3`);
     console.log(`   - Developers: ${developers.length}`);
-    console.log(`   - Questions: ${FLAT_QUESTIONS.length}`);
+    console.log(`   - Testers: ${testers.length}`);
+    console.log(`   - Questions: ${ALL_FLAT_QUESTIONS.length} (across all roles)`);
     console.log('\n🔑 Default Credentials:');
     console.log('   Admin:');
     console.log('      Email: admin@company.com');
     console.log('      Password: Admin@123');
     console.log('\n   Sample Developer:');
     console.log('      Email: john.doe@company.com');
+    console.log('      Password: Password@123');
+    console.log('\n   Sample Tester:');
+    console.log('      Email: sophia.thomas@company.com');
     console.log('      Password: Password@123');
     console.log('\n   Sample Tech Lead:');
     console.log('      Email: jane.smith@company.com');

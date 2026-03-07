@@ -26,6 +26,12 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear(
 
 const ROLES_THAT_CAN_CREATE: UserRole[] = ['admin'];
 
+const APPRAISABLE_ROLES: { value: string; label: string }[] = [
+  { value: 'developer', label: 'Developer / Tester' },
+  { value: 'tech_lead', label: 'Tech Lead' },
+  { value: 'manager', label: 'Manager' },
+];
+
 export default function AppraisalsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -127,7 +133,7 @@ export default function AppraisalsPage() {
             <table className="table">
               <thead>
                 <tr>
-                  {user?.role !== 'developer' && <th>Developer</th>}
+                  {user?.role !== 'developer' && user?.role !== 'tester' && <th>Employee</th>}
                   <th>Year</th>
                   <th>Status</th>
                   <th>Deadline</th>
@@ -138,11 +144,12 @@ export default function AppraisalsPage() {
               <tbody className="divide-y divide-slate-100">
                 {data?.appraisals.map((a) => (
                   <tr key={a.id}>
-                    {user?.role !== 'developer' && (
+                    {user?.role !== 'developer' && user?.role !== 'tester' && (
                       <td>
                         <div>
                           <p className="font-medium text-slate-900">{a.user?.name ?? '—'}</p>
                           <p className="text-xs text-slate-500">{a.user?.email}</p>
+                          <p className="text-xs text-slate-400 capitalize">{a.user?.role?.replace('_', ' ')}</p>
                         </div>
                       </td>
                     )}
@@ -237,14 +244,25 @@ interface CreateAppraisalModalProps {
 }
 
 function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps) {
+  const [selectedRole, setSelectedRole] = useState('developer');
   const [userId, setUserId] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [deadline, setDeadline] = useState('');
 
-  const { data: devData, isLoading: loadingDevs } = useQuery(
-    ['users', { role: 'developer' }],
-    () => userService.getUsers({ role: 'developer', limit: 100 })
+  const { data: userData, isLoading: loadingUsers } = useQuery(
+    ['users', { role: selectedRole }],
+    () => userService.getUsers({ role: selectedRole, limit: 100 })
   );
+
+  const { data: testerData } = useQuery(
+    ['users', { role: 'tester' }],
+    () => userService.getUsers({ role: 'tester', limit: 100 }),
+    { enabled: selectedRole === 'developer' }
+  );
+
+  const employeeOptions = selectedRole === 'developer'
+    ? [...(userData?.users ?? []), ...(testerData?.users ?? [])]
+    : (userData?.users ?? []);
 
   const mutation = useMutation(
     () => appraisalService.createAppraisal({ userId, year, deadline: deadline || undefined }),
@@ -262,6 +280,11 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
     }
   );
 
+  const handleRoleChange = (role: string) => {
+    setSelectedRole(role);
+    setUserId('');
+  };
+
   return (
     <Dialog open onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
@@ -277,8 +300,23 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
           </div>
           <div className="p-6 space-y-4">
             <div>
-              <label className="label">Developer</label>
-              {loadingDevs ? (
+              <label className="label">Role</label>
+              <select
+                value={selectedRole}
+                onChange={(e) => handleRoleChange(e.target.value)}
+                className="input"
+              >
+                {APPRAISABLE_ROLES.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="label">Employee</label>
+              {loadingUsers ? (
                 <LoadingSpinner size="sm" />
               ) : (
                 <select
@@ -287,10 +325,10 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
                   className="input"
                   required
                 >
-                  <option value="">Select developer...</option>
-                  {devData?.users.map((dev) => (
-                    <option key={dev.id} value={dev.id}>
-                      {dev.name} — {dev.email}
+                  <option value="">Select employee...</option>
+                  {employeeOptions.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} — {u.email}
                     </option>
                   ))}
                 </select>

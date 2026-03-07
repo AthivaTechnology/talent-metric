@@ -7,6 +7,7 @@ interface QuestionAttributes {
   sectionTitle: string;
   questionText: string;
   order: number;
+  applicableRole: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -19,6 +20,7 @@ class Question extends Model<QuestionAttributes, QuestionCreationAttributes> imp
   public sectionTitle!: string;
   public questionText!: string;
   public order!: number;
+  public applicableRole!: string;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -38,10 +40,6 @@ Question.init(
         min: {
           args: [1],
           msg: 'Section must be at least 1'
-        },
-        max: {
-          args: [7],
-          msg: 'Section must be at most 7'
         }
       }
     },
@@ -74,6 +72,12 @@ Question.init(
           msg: 'Order must be at least 1'
         }
       }
+    },
+    applicableRole: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'developer',
+      field: 'applicable_role'
     }
   },
   {
@@ -83,11 +87,11 @@ Question.init(
     underscored: true,
     indexes: [
       {
-        fields: ['section', 'order'],
-        name: 'section_order_index'
+        fields: ['applicable_role', 'section', 'order'],
+        name: 'role_section_order_index'
       },
       {
-        fields: ['section']
+        fields: ['applicable_role']
       }
     ]
   }

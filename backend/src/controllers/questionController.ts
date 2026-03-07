@@ -1,15 +1,25 @@
 import { Request, Response } from 'express';
 import { Question } from '../models';
-import { HTTP_STATUS } from '../config/constants';
+import { HTTP_STATUS, USER_ROLES } from '../config/constants';
 
 /**
  * @desc    Get all questions grouped by section
  * @route   GET /api/questions
  * @access  Private
  */
-export const getAllQuestions = async (_req: Request, res: Response): Promise<void> => {
+export const getAllQuestions = async (req: Request, res: Response): Promise<void> => {
   try {
+    const { role } = req.query;
+
+    // Validate role if provided
+    const validRoles = Object.values(USER_ROLES).filter(r => r !== 'admin');
+    const whereClause: Record<string, string> = {};
+    if (role && typeof role === 'string' && validRoles.includes(role as any)) {
+      whereClause.applicableRole = role;
+    }
+
     const questions = await Question.findAll({
+      where: Object.keys(whereClause).length ? whereClause : undefined,
       order: [
         ['section', 'ASC'],
         ['order', 'ASC']
