@@ -287,7 +287,7 @@ export default function AppraisalDetailPage() {
 
   const isDraft = appraisal.status === 'draft';
   const isCompleted = appraisal.status === 'completed';
-  const isOwnAppraisal = appraisal.userId === String(user?.id);
+  const isOwnAppraisal = String(appraisal.userId) === String(user?.id);
   const canEdit = isOwnAppraisal && isDraft;
   const canAdvance =
     !isCompleted &&
