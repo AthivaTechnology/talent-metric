@@ -107,6 +107,10 @@
   @apply min-h-[120px] p-3 text-sm text-slate-900 focus:outline-none;
 }
 
+.tiptap-editor .ProseMirror {
+  @apply outline-none;
+}
+
 .tiptap-editor p {
   @apply mb-2 last:mb-0;
 }
