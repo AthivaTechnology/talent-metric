@@ -89,11 +89,11 @@ jobs:
           REGISTRY: ${{ needs.build.outputs.ecr_registry }}
           TAG: ${{ needs.build.outputs.image_tag }}
         run: |
-          sed -i "s|image: .*${{ env.BACKEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.BACKEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/dev.yaml
-          sed -i "s|image: .*${{ env.FRONTEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.FRONTEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/dev.yaml
+          sed -i "s|image: .*${{ env.BACKEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.BACKEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/dev/dev.yaml
+          sed -i "s|image: .*${{ env.FRONTEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.FRONTEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/dev/dev.yaml
           # Replace general placeholders
-          sed -i "s/<YOUR_ACCOUNT_ID>/${{ secrets.AWS_ACCOUNT_ID }}/g" talent-metric/k8s/dev.yaml
-          sed -i "s/<YOUR_REGION>/${{ env.AWS_REGION }}/g" talent-metric/k8s/dev.yaml
+          sed -i "s/<YOUR_ACCOUNT_ID>/${{ secrets.AWS_ACCOUNT_ID }}/g" talent-metric/k8s/dev/dev.yaml
+          sed -i "s/<YOUR_REGION>/${{ env.AWS_REGION }}/g" talent-metric/k8s/dev/dev.yaml
 
 
       - name: Commit & push updated manifest
@@ -102,7 +102,7 @@ jobs:
         run: |
           git config user.name "talent-metric-ci-bot"
           git config user.email "ci@talent-metric.com"
-          git add talent-metric/k8s/dev.yaml
+          git add talent-metric/k8s/dev/dev.yaml
           git diff --staged --quiet && echo "No manifest changes, skipping commit" && exit 0
           git commit -m "ci(dev): update images to ${TAG:0:7} [skip ci]"
           git push origin main
@@ -132,11 +132,11 @@ jobs:
           REGISTRY: ${{ needs.build.outputs.ecr_registry }}
           TAG: ${{ needs.build.outputs.image_tag }}
         run: |
-          sed -i "s|image: .*${{ env.BACKEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.BACKEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/prod.yaml
-          sed -i "s|image: .*${{ env.FRONTEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.FRONTEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/prod.yaml
+          sed -i "s|image: .*${{ env.BACKEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.BACKEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/prod/prod.yaml
+          sed -i "s|image: .*${{ env.FRONTEND_REPOSITORY }}.*|image: $REGISTRY/${{ env.FRONTEND_REPOSITORY }}:$TAG|g" talent-metric/k8s/prod/prod.yaml
           # Replace general placeholders
-          sed -i "s/<YOUR_ACCOUNT_ID>/${{ secrets.AWS_ACCOUNT_ID }}/g" talent-metric/k8s/prod.yaml
-          sed -i "s/<YOUR_REGION>/${{ env.AWS_REGION }}/g" talent-metric/k8s/prod.yaml
+          sed -i "s/<YOUR_ACCOUNT_ID>/${{ secrets.AWS_ACCOUNT_ID }}/g" talent-metric/k8s/prod/prod.yaml
+          sed -i "s/<YOUR_REGION>/${{ env.AWS_REGION }}/g" talent-metric/k8s/prod/prod.yaml
 
       - name: Commit & push updated manifest
         env:
@@ -144,7 +144,7 @@ jobs:
         run: |
           git config user.name "talent-metric-ci-bot"
           git config user.email "ci@talent-metric.com"
-          git add talent-metric/k8s/prod.yaml
+          git add talent-metric/k8s/prod/prod.yaml
           git diff --staged --quiet && echo "No manifest changes, skipping commit" && exit 0
           git commit -m "ci(prod): update images to ${TAG:0:7} [skip ci]"
           git push origin main
