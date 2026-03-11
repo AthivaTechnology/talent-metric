@@ -6,7 +6,7 @@ interface StarRatingProps {
   onChange?: (rating: number) => void;
   readonly?: boolean;
   size?: 'sm' | 'md' | 'lg';
-  color?: 'amber' | 'indigo';
+  color?: 'amber' | 'sky' | 'indigo';
   className?: string;
 }
 
@@ -26,9 +26,10 @@ export default function StarRating({
     lg: 'w-8 h-8',
   };
 
-  const filledClass = color === 'indigo'
-    ? 'text-indigo-500 fill-indigo-500'
-    : 'text-amber-400 fill-amber-400';
+  const filledClass =
+    color === 'indigo' ? 'text-indigo-500 fill-indigo-500' :
+    color === 'sky'    ? 'text-sky-500 fill-sky-500' :
+                         'text-amber-400 fill-amber-400';
 
   const displayed = hovered || value;
 

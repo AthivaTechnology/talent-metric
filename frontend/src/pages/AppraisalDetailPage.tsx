@@ -13,6 +13,7 @@ import {
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
+import { getErrorMessage } from '@services/api';
 import { questionService } from '@services/questionService';
 import { useAuth } from '@context/AuthContext';
 import StatusBadge from '@components/common/StatusBadge';
@@ -167,6 +168,7 @@ export default function AppraisalDetailPage() {
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [techLeadRatings, setTechLeadRatings] = useState<Record<string, number>>({});
   const [reviewerRatings, setReviewerRatings] = useState<Record<string, number>>({});
   const [newComment, setNewComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -205,17 +207,18 @@ export default function AppraisalDetailPage() {
     });
     setAnswers(answerMap);
 
-    const selfRatingMap: Record<string, number> = {};
-    const reviewerRatingMap: Record<string, number> = {};
+    const selfMap: Record<string, number> = {};
+    const tlMap: Record<string, number> = {};
+    const managerMap: Record<string, number> = {};
     appraisal.ratings.forEach((r) => {
-      if (!r.raterRole || r.raterRole === 'self') {
-        selfRatingMap[r.category] = r.rating;
-      } else {
-        reviewerRatingMap[r.category] = r.rating;
-      }
+      if (!r.raterRole || r.raterRole === 'self') selfMap[r.category] = r.rating;
+      else if (r.raterRole === 'tech_lead') tlMap[r.category] = r.rating;
+      else if (r.raterRole === 'manager') managerMap[r.category] = r.rating;
     });
-    setRatings(selfRatingMap);
-    setReviewerRatings(reviewerRatingMap);
+    setRatings(selfMap);
+    setTechLeadRatings(tlMap);
+    // Seed reviewer input from previously saved ratings matching the viewer's role
+    setReviewerRatings(user?.role === 'manager' ? managerMap : tlMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appraisal?.id]);
 
@@ -236,7 +239,7 @@ export default function AppraisalDetailPage() {
         toast.success('Saved successfully');
         queryClient.invalidateQueries(['appraisal', id]);
       },
-      onError: () => { toast.error('Failed to save'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save')); },
     }
   );
 
@@ -248,7 +251,7 @@ export default function AppraisalDetailPage() {
         queryClient.invalidateQueries(['appraisal', id]);
         queryClient.invalidateQueries(['appraisals']);
       },
-      onError: () => { toast.error('Failed to advance workflow'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to advance workflow')); },
     }
   );
 
@@ -260,7 +263,7 @@ export default function AppraisalDetailPage() {
         setNewComment('');
         queryClient.invalidateQueries(['appraisal-comments', id]);
       },
-      onError: () => { toast.error('Failed to add comment'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to add comment')); },
     }
   );
 
@@ -278,7 +281,7 @@ export default function AppraisalDetailPage() {
         toast.success('Review ratings saved');
         queryClient.invalidateQueries(['appraisal', id]);
       },
-      onError: () => { toast.error('Failed to save review ratings'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save review ratings')); },
     }
   );
 
@@ -332,6 +335,13 @@ export default function AppraisalDetailPage() {
       user?.role === 'admin');
 
   const reviewerLabel = user?.role === 'manager' ? 'Manager' : 'Tech Lead';
+
+  // Show TL's ratings as a readonly row when the manager is reviewing or the appraisal is completed
+  const showTechLeadRow =
+    Object.keys(techLeadRatings).length > 0 &&
+    (!isOwnAppraisal
+      ? (user?.role === 'manager' && canReviewRatings) || isCompleted
+      : isCompleted);
 
   const handleReviewerRatingChange = (category: string, rating: number) => {
     setReviewerRatings((prev) => ({ ...prev, [category]: rating }));
@@ -440,7 +450,7 @@ export default function AppraisalDetailPage() {
           {/* Ratings */}
           <div className="card">
             <div className="card-header">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">Ratings</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
@@ -448,19 +458,27 @@ export default function AppraisalDetailPage() {
                       ? 'Rate yourself honestly on each dimension (1–5)'
                       : canReviewRatings
                       ? `Your ratings as ${reviewerLabel} alongside self-ratings`
-                      : 'Self and reviewer ratings'}
+                      : 'Ratings across all reviewers'}
                   </p>
                 </div>
                 {(canReviewRatings || isCompleted) && (
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" />
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
                       Self
                     </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                      {reviewerLabel}
-                    </span>
+                    {(showTechLeadRow || (canReviewRatings && user?.role === 'manager')) && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
+                        Tech Lead
+                      </span>
+                    )}
+                    {(canReviewRatings || (isCompleted && Object.keys(reviewerRatings).length > 0)) && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+                        {reviewerLabel}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -477,19 +495,32 @@ export default function AppraisalDetailPage() {
                       {/* Self rating */}
                       <div className="flex items-center gap-2">
                         {(canReviewRatings || isCompleted) && (
-                          <span className="text-xs text-slate-400 w-12 text-right">Self</span>
+                          <span className="text-xs text-slate-400 w-16 text-right">Self</span>
                         )}
                         <StarRating
                           value={ratings[cat.key] ?? 0}
                           onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
                           readonly={!canEdit}
                           size="md"
+                          color="amber"
                         />
                       </div>
-                      {/* Reviewer rating */}
+                      {/* Tech Lead rating — shown to managers (readonly) and on completed view */}
+                      {showTechLeadRow && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 w-16 text-right">Tech Lead</span>
+                          <StarRating
+                            value={techLeadRatings[cat.key] ?? 0}
+                            readonly
+                            size="md"
+                            color="sky"
+                          />
+                        </div>
+                      )}
+                      {/* Reviewer's own rating (editable while active, readonly when completed) */}
                       {(canReviewRatings || (isCompleted && reviewerRatings[cat.key])) && (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 w-12 text-right">{reviewerLabel}</span>
+                          <span className="text-xs text-slate-400 w-16 text-right">{reviewerLabel}</span>
                           <StarRating
                             value={reviewerRatings[cat.key] ?? 0}
                             onChange={canReviewRatings ? (v) => handleReviewerRatingChange(cat.key, v) : undefined}

@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
 import toast from 'react-hot-toast';
+import { getErrorMessage } from '@services/api';
 import { ChartBarIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from '@components/common/LoadingSpinner';
 
@@ -32,10 +33,7 @@ export default function LoginPage() {
       toast.success('Welcome back!');
       navigate(from, { replace: true });
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        'Invalid credentials. Please try again.';
-      toast.error(message);
+      toast.error(getErrorMessage(err, 'Invalid credentials. Please try again.'));
     } finally {
       setIsLoading(false);
     }
