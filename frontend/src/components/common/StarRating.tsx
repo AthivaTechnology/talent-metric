@@ -6,6 +6,7 @@ interface StarRatingProps {
   onChange?: (rating: number) => void;
   readonly?: boolean;
   size?: 'sm' | 'md' | 'lg';
+  color?: 'amber' | 'indigo';
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export default function StarRating({
   onChange,
   readonly = false,
   size = 'md',
+  color = 'amber',
   className,
 }: StarRatingProps) {
   const [hovered, setHovered] = useState(0);
@@ -23,6 +25,10 @@ export default function StarRating({
     md: 'w-6 h-6',
     lg: 'w-8 h-8',
   };
+
+  const filledClass = color === 'indigo'
+    ? 'text-indigo-500 fill-indigo-500'
+    : 'text-amber-400 fill-amber-400';
 
   const displayed = hovered || value;
 
@@ -45,9 +51,7 @@ export default function StarRating({
           <svg
             className={clsx(
               sizeClasses[size],
-              star <= displayed
-                ? 'text-amber-400 fill-amber-400'
-                : 'text-slate-300 fill-slate-300'
+              star <= displayed ? filledClass : 'text-slate-300 fill-slate-300'
             )}
             viewBox="0 0 20 20"
             xmlns="http://www.w3.org/2000/svg"

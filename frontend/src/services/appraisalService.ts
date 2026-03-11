@@ -2,6 +2,7 @@ import api from './api';
 import type {
   Appraisal,
   Comment,
+  RatingCategory,
   CreateAppraisalPayload,
   UpdateAppraisalPayload,
 } from '@/types/index';
@@ -58,5 +59,9 @@ export const appraisalService = {
   async getComments(id: string): Promise<Comment[]> {
     const res = await api.get(`/appraisals/${id}/comments`);
     return res.data.data;
+  },
+
+  async saveReviewerRatings(id: string, ratings: Array<{ category: RatingCategory; rating: number }>): Promise<void> {
+    await api.put(`/appraisals/${id}/reviewer-ratings`, { ratings });
   },
 };

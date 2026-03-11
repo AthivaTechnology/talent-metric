@@ -2,11 +2,14 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 import { RATING_CATEGORIES, RatingCategory } from '../config/constants';
 
+export type RaterRole = 'self' | 'tech_lead' | 'manager';
+
 interface RatingAttributes {
   id: number;
   appraisalId: number;
   category: RatingCategory;
   rating: number;
+  raterRole: RaterRole;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -18,6 +21,7 @@ class Rating extends Model<RatingAttributes, RatingCreationAttributes> implement
   public appraisalId!: number;
   public category!: RatingCategory;
   public rating!: number;
+  public raterRole!: RaterRole;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -83,6 +87,12 @@ Rating.init(
           msg: 'Rating must be an integer'
         }
       }
+    },
+    raterRole: {
+      type: DataTypes.ENUM('self', 'tech_lead', 'manager'),
+      allowNull: false,
+      defaultValue: 'self',
+      field: 'rater_role'
     }
   },
   {
@@ -93,8 +103,8 @@ Rating.init(
     indexes: [
       {
         unique: true,
-        fields: ['appraisal_id', 'category'],
-        name: 'unique_appraisal_category'
+        fields: ['appraisal_id', 'category', 'rater_role'],
+        name: 'unique_appraisal_category_rater'
       },
       {
         fields: ['appraisal_id']

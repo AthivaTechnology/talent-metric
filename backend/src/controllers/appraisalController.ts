@@ -358,7 +358,8 @@ export const updateAppraisal = async (req: AuthRequest, res: Response): Promise<
         await Rating.upsert({
           appraisalId: appraisal.id,
           category: rating.category,
-          rating: rating.rating
+          rating: rating.rating,
+          raterRole: 'self'
         });
       }
     }
@@ -530,6 +531,87 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       success: false,
       message: 'Error submitting appraisal'
     });
+  }
+};
+
+/**
+ * @desc    Save reviewer ratings (tech lead or manager)
+ * @route   PUT /api/appraisals/:id/reviewer-ratings
+ * @access  Private (Tech Lead, Manager)
+ */
+export const saveReviewerRatings = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { id } = req.params;
+    const { ratings } = req.body;
+
+    if (!ratings || !Array.isArray(ratings) || ratings.length === 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Ratings are required' });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(id, {
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const appraisalUser = (appraisal as any).user as User | null;
+
+    // Determine raterRole and verify permissions
+    let raterRole: 'tech_lead' | 'manager';
+
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      if (appraisal.status !== APPRAISAL_STATUS.SUBMITTED && appraisal.status !== APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Tech lead can only rate during submitted or tech lead review stage' });
+        return;
+      }
+      if (!appraisalUser || appraisalUser.techLeadId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only rate your own team members' });
+        return;
+      }
+      raterRole = 'tech_lead';
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      if (appraisal.status !== APPRAISAL_STATUS.MANAGER_REVIEW) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Manager can only rate during manager review stage' });
+        return;
+      }
+      if (!appraisalUser || appraisalUser.managerId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only rate your own reportees' });
+        return;
+      }
+      raterRole = 'manager';
+    } else if (req.user.role === USER_ROLES.ADMIN) {
+      raterRole = appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW ? 'manager' : 'tech_lead';
+    } else {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only tech leads and managers can submit reviewer ratings' });
+      return;
+    }
+
+    for (const rating of ratings) {
+      if (rating.rating < 1 || rating.rating > 5) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: ERROR_MESSAGES.INVALID_RATING });
+        return;
+      }
+      await Rating.upsert({
+        appraisalId: appraisal.id,
+        category: rating.category,
+        rating: rating.rating,
+        raterRole
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Reviewer ratings saved successfully' });
+  } catch (error) {
+    console.error('Save reviewer ratings error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error saving reviewer ratings' });
   }
 };
 
@@ -771,6 +853,7 @@ export default {
   createAppraisal,
   updateAppraisal,
   submitAppraisal,
+  saveReviewerRatings,
   addComment,
   getComments,
   deleteAppraisal

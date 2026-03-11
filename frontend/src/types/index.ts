@@ -95,9 +95,12 @@ export interface Response {
   question?: Question;
 }
 
+export type RaterRole = 'self' | 'tech_lead' | 'manager';
+
 export interface Rating {
   category: RatingCategory;
   rating: number; // 1-5
+  raterRole?: RaterRole;
 }
 
 export interface Comment {
