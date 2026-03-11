@@ -13,6 +13,7 @@ import {
   PaperAirplaneIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
+import { getErrorMessage } from '@services/api';
 import { questionService } from '@services/questionService';
 import { useAuth } from '@context/AuthContext';
 import StatusBadge from '@components/common/StatusBadge';
@@ -167,8 +168,11 @@ export default function AppraisalDetailPage() {
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [techLeadRatings, setTechLeadRatings] = useState<Record<string, number>>({});
+  const [reviewerRatings, setReviewerRatings] = useState<Record<string, number>>({});
   const [newComment, setNewComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingReview, setIsSavingReview] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
 
   const appraisalQuery = useQuery(
@@ -203,11 +207,18 @@ export default function AppraisalDetailPage() {
     });
     setAnswers(answerMap);
 
-    const ratingMap: Record<string, number> = {};
+    const selfMap: Record<string, number> = {};
+    const tlMap: Record<string, number> = {};
+    const managerMap: Record<string, number> = {};
     appraisal.ratings.forEach((r) => {
-      ratingMap[r.category] = r.rating;
+      if (!r.raterRole || r.raterRole === 'self') selfMap[r.category] = r.rating;
+      else if (r.raterRole === 'tech_lead') tlMap[r.category] = r.rating;
+      else if (r.raterRole === 'manager') managerMap[r.category] = r.rating;
     });
-    setRatings(ratingMap);
+    setRatings(selfMap);
+    setTechLeadRatings(tlMap);
+    // Seed reviewer input from previously saved ratings matching the viewer's role
+    setReviewerRatings(user?.role === 'manager' ? managerMap : tlMap);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appraisal?.id]);
 
@@ -228,7 +239,7 @@ export default function AppraisalDetailPage() {
         toast.success('Saved successfully');
         queryClient.invalidateQueries(['appraisal', id]);
       },
-      onError: () => { toast.error('Failed to save'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save')); },
     }
   );
 
@@ -240,7 +251,7 @@ export default function AppraisalDetailPage() {
         queryClient.invalidateQueries(['appraisal', id]);
         queryClient.invalidateQueries(['appraisals']);
       },
-      onError: () => { toast.error('Failed to advance workflow'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to advance workflow')); },
     }
   );
 
@@ -252,7 +263,25 @@ export default function AppraisalDetailPage() {
         setNewComment('');
         queryClient.invalidateQueries(['appraisal-comments', id]);
       },
-      onError: () => { toast.error('Failed to add comment'); },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to add comment')); },
+    }
+  );
+
+  const reviewerRatingsMutation = useMutation(
+    () =>
+      appraisalService.saveReviewerRatings(
+        id!,
+        Object.entries(reviewerRatings).map(([category, rating]) => ({
+          category: category as import('@/types/index').RatingCategory,
+          rating,
+        }))
+      ),
+    {
+      onSuccess: () => {
+        toast.success('Review ratings saved');
+        queryClient.invalidateQueries(['appraisal', id]);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save review ratings')); },
     }
   );
 
@@ -296,6 +325,32 @@ export default function AppraisalDetailPage() {
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
       (user?.role === 'manager' && appraisal.status === 'manager_review') ||
       user?.role === 'admin');
+
+  const canReviewRatings =
+    !isOwnAppraisal &&
+    !isCompleted &&
+    ((user?.role === 'tech_lead' &&
+        (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
+      (user?.role === 'manager' && appraisal.status === 'manager_review') ||
+      user?.role === 'admin');
+
+  const reviewerLabel = user?.role === 'manager' ? 'Manager' : 'Tech Lead';
+
+  // Show TL's ratings as a readonly row when the manager is reviewing or the appraisal is completed
+  const showTechLeadRow =
+    Object.keys(techLeadRatings).length > 0 &&
+    (!isOwnAppraisal
+      ? (user?.role === 'manager' && canReviewRatings) || isCompleted
+      : isCompleted);
+
+  const handleReviewerRatingChange = (category: string, rating: number) => {
+    setReviewerRatings((prev) => ({ ...prev, [category]: rating }));
+  };
+
+  const handleSaveReview = async () => {
+    setIsSavingReview(true);
+    await reviewerRatingsMutation.mutateAsync().finally(() => setIsSavingReview(false));
+  };
 
   const advanceLabel = ADVANCE_LABELS[appraisal.status] ?? 'Advance';
 
@@ -392,42 +447,109 @@ export default function AppraisalDetailPage() {
             </div>
           )}
 
-          {/* Self-ratings */}
+          {/* Ratings */}
           <div className="card">
             <div className="card-header">
-              <h2 className="text-base font-semibold text-slate-900">Self Ratings</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Rate yourself honestly on each dimension (1–5)</p>
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Ratings</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {canEdit
+                      ? 'Rate yourself honestly on each dimension (1–5)'
+                      : canReviewRatings
+                      ? `Your ratings as ${reviewerLabel} alongside self-ratings`
+                      : 'Ratings across all reviewers'}
+                  </p>
+                </div>
+                {(canReviewRatings || isCompleted) && (
+                  <div className="flex items-center gap-3 text-xs text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                      Self
+                    </span>
+                    {(showTechLeadRow || (canReviewRatings && user?.role === 'manager')) && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
+                        Tech Lead
+                      </span>
+                    )}
+                    {(canReviewRatings || (isCompleted && Object.keys(reviewerRatings).length > 0)) && (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+                        {reviewerLabel}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="card-body divide-y divide-slate-100">
               {getRatingConfig(appraisal.user?.role).map((cat) => (
-                <div key={cat.key} className="flex items-center justify-between py-4 first:pt-0 last:pb-0">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{cat.label}</p>
-                    <p className="text-xs text-slate-500">{cat.desc}</p>
+                <div key={cat.key} className="py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-900">{cat.label}</p>
+                      <p className="text-xs text-slate-500">{cat.desc}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {/* Self rating */}
+                      <div className="flex items-center gap-2">
+                        {(canReviewRatings || isCompleted) && (
+                          <span className="text-xs text-slate-400 w-16 text-right">Self</span>
+                        )}
+                        <StarRating
+                          value={ratings[cat.key] ?? 0}
+                          onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
+                          readonly={!canEdit}
+                          size="md"
+                          color="amber"
+                        />
+                      </div>
+                      {/* Tech Lead rating — shown to managers (readonly) and on completed view */}
+                      {showTechLeadRow && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 w-16 text-right">Tech Lead</span>
+                          <StarRating
+                            value={techLeadRatings[cat.key] ?? 0}
+                            readonly
+                            size="md"
+                            color="sky"
+                          />
+                        </div>
+                      )}
+                      {/* Reviewer's own rating (editable while active, readonly when completed) */}
+                      {(canReviewRatings || (isCompleted && reviewerRatings[cat.key])) && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 w-16 text-right">{reviewerLabel}</span>
+                          <StarRating
+                            value={reviewerRatings[cat.key] ?? 0}
+                            onChange={canReviewRatings ? (v) => handleReviewerRatingChange(cat.key, v) : undefined}
+                            readonly={!canReviewRatings}
+                            size="md"
+                            color="indigo"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <StarRating
-                    value={ratings[cat.key] ?? 0}
-                    onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
-                    readonly={!canEdit}
-                    size="md"
-                  />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Save button for developer in draft */}
-          {canEdit && (
-            <div className="flex gap-3">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="btn-secondary"
-              >
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            {canEdit && (
+              <button onClick={handleSave} disabled={isSaving} className="btn-secondary">
                 {isSaving ? <LoadingSpinner size="sm" /> : 'Save Draft'}
               </button>
-            </div>
-          )}
+            )}
+            {canReviewRatings && (
+              <button onClick={handleSaveReview} disabled={isSavingReview} className="btn-secondary">
+                {isSavingReview ? <LoadingSpinner size="sm" /> : 'Save Review Ratings'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Right: actions + comments */}

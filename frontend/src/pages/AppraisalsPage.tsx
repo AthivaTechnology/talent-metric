@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { PlusIcon, FunnelIcon } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
+import { getErrorMessage } from '@services/api';
 import { userService } from '@services/userService';
 import { useAuth } from '@context/AuthContext';
 import StatusBadge from '@components/common/StatusBadge';
@@ -272,10 +273,7 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
         onCreated();
       },
       onError: (err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          'Failed to create appraisal';
-        toast.error(msg);
+        toast.error(getErrorMessage(err, 'Failed to create appraisal'));
       },
     }
   );

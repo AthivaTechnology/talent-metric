@@ -32,4 +32,12 @@ api.interceptors.response.use(
   }
 );
 
+/** Extract backend error message from an Axios error, with a fallback. */
+export function getErrorMessage(err: unknown, fallback = 'Something went wrong'): string {
+  return (
+    (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+    (err instanceof Error ? err.message : fallback)
+  );
+}
+
 export default api;

@@ -5,6 +5,7 @@ import {
   createAppraisal,
   updateAppraisal,
   submitAppraisal,
+  saveReviewerRatings,
   addComment,
   getComments,
   deleteAppraisal
@@ -47,6 +48,13 @@ router.put('/:id', authenticate, updateAppraisal);
  * @access  Private
  */
 router.post('/:id/submit', authenticate, submitAppraisal);
+
+/**
+ * @route   PUT /api/appraisals/:id/reviewer-ratings
+ * @desc    Save tech lead / manager ratings
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.put('/:id/reviewer-ratings', authenticate, saveReviewerRatings);
 
 /**
  * @route   GET /api/appraisals/:id/comments

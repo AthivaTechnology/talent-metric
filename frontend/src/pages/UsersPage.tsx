@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Dialog } from '@headlessui/react';
 import { userService } from '@services/userService';
+import { getErrorMessage } from '@services/api';
 import LoadingSpinner from '@components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import type { User, UserRole, CreateUserPayload, UpdateUserPayload } from '@/types/index';
@@ -60,7 +61,7 @@ export default function UsersPage() {
       setDeleteTarget(null);
       queryClient.invalidateQueries(['users']);
     },
-    onError: () => { toast.error('Failed to delete user'); },
+    onError: (err) => { toast.error(getErrorMessage(err, 'Failed to delete user')); },
   });
 
   return (
@@ -316,10 +317,7 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
         onSaved();
       },
       onError: (err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          'Failed to save user';
-        toast.error(msg);
+        toast.error(getErrorMessage(err, 'Failed to save user'));
       },
     }
   );

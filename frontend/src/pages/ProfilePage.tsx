@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useMutation } from 'react-query';
 import { useAuth } from '@context/AuthContext';
 import { authService } from '@services/authService';
+import { getErrorMessage } from '@services/api';
 import LoadingSpinner from '@components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { UserCircleIcon, KeyIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
@@ -44,10 +45,7 @@ export default function ProfilePage() {
         refreshUser();
       },
       onError: (err: unknown) => {
-        const msg =
-          (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-          'Failed to change password';
-        toast.error(msg);
+        toast.error(getErrorMessage(err, 'Failed to change password'));
       },
     }
   );
