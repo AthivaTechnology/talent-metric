@@ -122,8 +122,15 @@ export interface Appraisal {
   responses: Response[];
   ratings: Rating[];
   comments?: Comment[];
+  managerFeedback?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TrendPoint {
+  year: number;
+  avgRating: number | null;
+  completed: number;
 }
 
 export interface DashboardStats {

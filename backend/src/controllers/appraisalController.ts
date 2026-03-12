@@ -847,6 +847,126 @@ const checkAppraisalAccess = async (
   return false;
 };
 
+/**
+ * @desc    Save manager's final feedback on an appraisal
+ * @route   PUT /api/appraisals/:id/manager-feedback
+ * @access  Private (Manager, Admin)
+ */
+export const saveManagerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { id } = req.params;
+    const { feedback } = req.body;
+
+    const appraisal = await Appraisal.findByPk(id, {
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const appraisalUser = (appraisal as any).user as User | null;
+
+    if (req.user.role === USER_ROLES.MANAGER) {
+      if (appraisal.status !== APPRAISAL_STATUS.MANAGER_REVIEW && appraisal.status !== APPRAISAL_STATUS.COMPLETED) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Feedback can only be added during manager review stage' });
+        return;
+      }
+      if (!appraisalUser || appraisalUser.managerId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only provide feedback for your own reportees' });
+        return;
+      }
+    } else if (req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only managers can provide final feedback' });
+      return;
+    }
+
+    appraisal.managerFeedback = feedback?.trim() || null;
+    await appraisal.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Feedback saved', data: { managerFeedback: appraisal.managerFeedback } });
+  } catch (error) {
+    console.error('Save manager feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error saving feedback' });
+  }
+};
+
+/**
+ * @desc    Bulk create appraisals for all active users
+ * @route   POST /api/appraisals/bulk
+ * @access  Private (Admin only)
+ */
+export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { year, deadline } = req.body;
+
+    if (!year) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Year is required' });
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    if (year < 2000 || year > currentYear + 1) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: ERROR_MESSAGES.INVALID_YEAR });
+      return;
+    }
+
+    const users = await User.findAll({
+      where: { role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] } }
+    });
+
+    const existingAppraisals = await Appraisal.findAll({
+      where: { year, userId: { [Op.in]: users.map(u => u.id) } },
+      attributes: ['userId']
+    });
+    const existingUserIds = new Set(existingAppraisals.map(a => a.userId));
+
+    let created = 0;
+    for (const user of users) {
+      if (existingUserIds.has(user.id)) continue;
+
+      const appraisal = await Appraisal.create({
+        userId: user.id,
+        year,
+        status: APPRAISAL_STATUS.DRAFT,
+        deadline: deadline ? new Date(deadline) : null
+      });
+
+      const questions = await Question.findAll({ where: { applicableRole: user.role } });
+      if (questions.length > 0) {
+        await ResponseModel.bulkCreate(questions.map(q => ({ appraisalId: appraisal.id, questionId: q.id, answer: '' })));
+      }
+      created++;
+    }
+
+    const skipped = users.length - created;
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: `Created ${created} appraisal${created !== 1 ? 's' : ''}${skipped > 0 ? `, skipped ${skipped} (already exist)` : ''}.`,
+      data: { created, skipped }
+    });
+  } catch (error) {
+    console.error('Bulk create appraisals error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error creating appraisals' });
+  }
+};
+
 export default {
   getAllAppraisals,
   getAppraisalById,
@@ -854,6 +974,8 @@ export default {
   updateAppraisal,
   submitAppraisal,
   saveReviewerRatings,
+  saveManagerFeedback,
+  bulkCreateAppraisals,
   addComment,
   getComments,
   deleteAppraisal

@@ -12,12 +12,13 @@ interface AppraisalAttributes {
   techLeadReviewedAt?: Date | null;
   managerReviewedAt?: Date | null;
   completedAt?: Date | null;
+  managerFeedback?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 interface AppraisalCreationAttributes
-  extends Optional<AppraisalAttributes, 'id' | 'deadline' | 'submittedAt' | 'techLeadReviewedAt' | 'managerReviewedAt' | 'completedAt'> {}
+  extends Optional<AppraisalAttributes, 'id' | 'deadline' | 'submittedAt' | 'techLeadReviewedAt' | 'managerReviewedAt' | 'completedAt' | 'managerFeedback'> {}
 
 class Appraisal extends Model<AppraisalAttributes, AppraisalCreationAttributes> implements AppraisalAttributes {
   public id!: number;
@@ -29,6 +30,7 @@ class Appraisal extends Model<AppraisalAttributes, AppraisalCreationAttributes> 
   public techLeadReviewedAt!: Date | null;
   public managerReviewedAt!: Date | null;
   public completedAt!: Date | null;
+  public managerFeedback!: string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -116,6 +118,11 @@ Appraisal.init(
       type: DataTypes.DATE,
       allowNull: true,
       field: 'completed_at'
+    },
+    managerFeedback: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'manager_feedback'
     }
   },
   {

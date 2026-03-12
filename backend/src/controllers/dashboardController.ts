@@ -379,8 +379,68 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
   }
 };
 
+/**
+ * @desc    Get year-over-year rating trend
+ * @route   GET /api/dashboard/trend
+ * @access  Private
+ */
+export const getTrend = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const years = [currentYear - 3, currentYear - 2, currentYear - 1, currentYear];
+
+    let userIds: number[];
+
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
+      userIds = [req.user.id];
+    } else if (req.user.role === USER_ROLES.TECH_LEAD) {
+      const members = await User.findAll({ where: { techLeadId: req.user.id }, attributes: ['id'] });
+      userIds = members.map(m => m.id);
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      const reportees = await User.findAll({ where: { managerId: req.user.id }, attributes: ['id'] });
+      userIds = reportees.map(r => r.id);
+    } else {
+      const all = await User.findAll({
+        where: { role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER] } },
+        attributes: ['id']
+      });
+      userIds = all.map(u => u.id);
+    }
+
+    const trend = await Promise.all(
+      years.map(async (year) => {
+        const appraisals = await Appraisal.findAll({
+          where: { userId: { [Op.in]: userIds }, year, status: APPRAISAL_STATUS.COMPLETED },
+          include: [{ model: Rating, as: 'ratings' }]
+        });
+
+        const selfRatings = appraisals.flatMap(a =>
+          ((a as any).ratings as any[]).filter(r => !r.raterRole || r.raterRole === 'self').map(r => r.rating as number)
+        );
+
+        const avgRating = selfRatings.length > 0
+          ? parseFloat((selfRatings.reduce((a, b) => a + b, 0) / selfRatings.length).toFixed(2))
+          : null;
+
+        return { year, avgRating, completed: appraisals.length };
+      })
+    );
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: trend });
+  } catch (error) {
+    console.error('Get trend error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error fetching trend data' });
+  }
+};
+
 export default {
   getDashboardStats,
   getTeamAppraisals,
-  getTeamAnalytics
+  getTeamAnalytics,
+  getTrend
 };

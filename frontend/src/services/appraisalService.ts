@@ -64,4 +64,13 @@ export const appraisalService = {
   async saveReviewerRatings(id: string, ratings: Array<{ category: RatingCategory; rating: number }>): Promise<void> {
     await api.put(`/appraisals/${id}/reviewer-ratings`, { ratings });
   },
+
+  async saveManagerFeedback(id: string, feedback: string): Promise<void> {
+    await api.put(`/appraisals/${id}/manager-feedback`, { feedback });
+  },
+
+  async bulkCreate(payload: { year: number; deadline?: string }): Promise<{ created: number; skipped: number; message: string }> {
+    const res = await api.post('/appraisals/bulk', payload);
+    return { ...res.data.data, message: res.data.message };
+  },
 };

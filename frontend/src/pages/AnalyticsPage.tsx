@@ -13,6 +13,9 @@ import {
   Pie,
   Cell,
   Legend,
+  LineChart,
+  Line,
+  ReferenceLine,
 } from 'recharts';
 
 const PIE_COLORS = ['#6366f1', '#3b82f6', '#8b5cf6', '#f59e0b', '#22c55e'];
@@ -29,6 +32,12 @@ export default function AnalyticsPage() {
   const { data, isLoading, isError } = useQuery(
     ['team-analytics'],
     dashboardService.getTeamAnalytics,
+    { staleTime: 60_000 }
+  );
+
+  const { data: trendData } = useQuery(
+    ['trend'],
+    dashboardService.getTrend,
     { staleTime: 60_000 }
   );
 
@@ -165,6 +174,46 @@ export default function AnalyticsPage() {
             )}
           </div>
         </div>
+
+        {/* Year-over-year trend */}
+        {trendData && (
+          <div className="card lg:col-span-2">
+            <div className="card-header">
+              <h2 className="text-base font-semibold text-slate-900">Year-over-Year Trend</h2>
+              <p className="text-sm text-slate-500 mt-0.5">Average self-rating across completed appraisals</p>
+            </div>
+            <div className="p-4">
+              {trendData.every(p => p.avgRating === null) ? (
+                <div className="text-center py-8 text-slate-400 text-sm">No completed appraisals yet to show trend.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={trendData} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="year" tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <YAxis domain={[0, 5]} tick={{ fontSize: 12, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                      formatter={(v: unknown, _: string, props: { payload?: { completed: number } }) => [
+                        v !== null && v !== undefined ? `${v} / 5` : 'No data',
+                        `Avg Rating (${props.payload?.completed ?? 0} completed)`,
+                      ]}
+                    />
+                    <ReferenceLine y={3} stroke="#e2e8f0" strokeDasharray="4 4" label={{ value: 'Meets Expectations', position: 'insideTopLeft', fontSize: 10, fill: '#94a3b8' }} />
+                    <Line
+                      type="monotone"
+                      dataKey="avgRating"
+                      stroke="#6366f1"
+                      strokeWidth={2.5}
+                      dot={{ r: 5, fill: '#6366f1', strokeWidth: 0 }}
+                      activeDot={{ r: 7 }}
+                      connectNulls={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Rating distribution */}
         <div className="card lg:col-span-2">

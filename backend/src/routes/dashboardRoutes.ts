@@ -2,7 +2,8 @@ import { Router } from 'express';
 import {
   getDashboardStats,
   getTeamAppraisals,
-  getTeamAnalytics
+  getTeamAnalytics,
+  getTrend
 } from '../controllers/dashboardController';
 import { authenticate, isManagerOrAdmin, isTechLeadOrAbove } from '../middleware/auth';
 
@@ -28,5 +29,12 @@ router.get('/team', authenticate, isTechLeadOrAbove, getTeamAppraisals);
  * @access  Private (Manager, Admin)
  */
 router.get('/analytics', authenticate, isManagerOrAdmin, getTeamAnalytics);
+
+/**
+ * @route   GET /api/dashboard/trend
+ * @desc    Get year-over-year rating trend
+ * @access  Private
+ */
+router.get('/trend', authenticate, getTrend);
 
 export default router;

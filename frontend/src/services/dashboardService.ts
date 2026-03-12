@@ -1,5 +1,5 @@
 import api from './api';
-import type { ApiResponse, DashboardStats, TeamAppraisal, AnalyticsData } from '@/types/index';
+import type { ApiResponse, DashboardStats, TeamAppraisal, AnalyticsData, TrendPoint } from '@/types/index';
 
 export const dashboardService = {
   async getDashboardStats(): Promise<DashboardStats> {
@@ -20,5 +20,10 @@ export const dashboardService = {
       ? Object.entries(raw.averageRatings).map(([category, average]) => ({ category, average: average as number }))
       : (raw.averageRatings ?? []);
     return { ...raw, averageRatings };
+  },
+
+  async getTrend(): Promise<TrendPoint[]> {
+    const res = await api.get<ApiResponse<TrendPoint[]>>('/dashboard/trend');
+    return res.data.data;
   },
 };

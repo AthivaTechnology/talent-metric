@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -152,6 +152,26 @@ function CommentItem({ comment }: { comment: Comment }) {
   );
 }
 
+function getDeadlineBadge(deadline: string, isCompleted: boolean): 'overdue' | 'due-soon' | null {
+  if (isCompleted) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(deadline);
+  due.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays < 0) return 'overdue';
+  if (diffDays <= 3) return 'due-soon';
+  return null;
+}
+
+const RATING_LABELS: Record<number, string> = {
+  1: 'Needs Improvement',
+  2: 'Below Expectations',
+  3: 'Meets Expectations',
+  4: 'Exceeds Expectations',
+  5: 'Outstanding',
+};
+
 // Advance stage button labels
 const ADVANCE_LABELS: Record<string, string> = {
   draft: 'Submit Appraisal',
@@ -174,6 +194,11 @@ export default function AppraisalDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [managerFeedback, setManagerFeedback] = useState('');
+  const [feedbackAutoSave, setFeedbackAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const canReviewRatingsRef = useRef(false);
+  const canEditFeedbackRef = useRef(false);
 
   const appraisalQuery = useQuery(
     ['appraisal', id],
@@ -219,6 +244,8 @@ export default function AppraisalDetailPage() {
     setTechLeadRatings(tlMap);
     // Seed reviewer input from previously saved ratings matching the viewer's role
     setReviewerRatings(user?.role === 'manager' ? managerMap : tlMap);
+    // Initialize manager feedback
+    setManagerFeedback(appraisal.managerFeedback ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appraisal?.id]);
 
@@ -285,6 +312,42 @@ export default function AppraisalDetailPage() {
     }
   );
 
+  const saveManagerFeedbackMutation = useMutation(
+    () => appraisalService.saveManagerFeedback(id!, managerFeedback),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['appraisal', id]);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save feedback')); },
+    }
+  );
+
+  // Auto-save reviewer ratings 2s after last change
+  useEffect(() => {
+    if (!canReviewRatingsRef.current) return;
+    setAutoSaveStatus('saving');
+    const timer = setTimeout(() => {
+      reviewerRatingsMutation.mutate();
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 3000);
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewerRatings]);
+
+  // Auto-save manager feedback 2s after last change
+  useEffect(() => {
+    if (!canEditFeedbackRef.current) return;
+    setFeedbackAutoSave('saving');
+    const timer = setTimeout(() => {
+      saveManagerFeedbackMutation.mutate();
+      setFeedbackAutoSave('saved');
+      setTimeout(() => setFeedbackAutoSave('idle'), 3000);
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managerFeedback]);
+
   const handleSave = async () => {
     setIsSaving(true);
     await saveMutation.mutateAsync().finally(() => setIsSaving(false));
@@ -335,6 +398,12 @@ export default function AppraisalDetailPage() {
       user?.role === 'admin');
 
   const reviewerLabel = user?.role === 'manager' ? 'Manager' : 'Tech Lead';
+  const canEditManagerFeedback =
+    appraisal.status === 'manager_review' &&
+    (user?.role === 'manager' || user?.role === 'admin');
+  canReviewRatingsRef.current = canReviewRatings;
+  canEditFeedbackRef.current = canEditManagerFeedback;
+  const deadlineBadge = appraisal.deadline ? getDeadlineBadge(appraisal.deadline, isCompleted) : null;
 
   // Show TL's ratings as a readonly row when the manager is reviewing or the appraisal is completed
   const showTechLeadRow =
@@ -372,8 +441,16 @@ export default function AppraisalDetailPage() {
           <div className="flex items-center gap-3 mt-2">
             <StatusBadge status={appraisal.status} />
             {appraisal.deadline && (
-              <span className="text-sm text-slate-500">
-                Due {format(new Date(appraisal.deadline), 'MMM d, yyyy')}
+              <span className="flex items-center gap-2">
+                <span className="text-sm text-slate-500">
+                  Due {format(new Date(appraisal.deadline), 'MMM d, yyyy')}
+                </span>
+                {deadlineBadge === 'overdue' && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">Overdue</span>
+                )}
+                {deadlineBadge === 'due-soon' && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">Due soon</span>
+                )}
               </span>
             )}
           </div>
@@ -493,41 +570,56 @@ export default function AppraisalDetailPage() {
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                       {/* Self rating */}
-                      <div className="flex items-center gap-2">
-                        {(canReviewRatings || isCompleted) && (
-                          <span className="text-xs text-slate-400 w-16 text-right">Self</span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <div className="flex items-center gap-2">
+                          {(canReviewRatings || isCompleted) && (
+                            <span className="text-xs text-slate-400 w-16 text-right">Self</span>
+                          )}
+                          <StarRating
+                            value={ratings[cat.key] ?? 0}
+                            onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
+                            readonly={!canEdit}
+                            size="md"
+                            color="amber"
+                          />
+                        </div>
+                        {(ratings[cat.key] ?? 0) > 0 && (
+                          <span className="text-xs text-slate-400 italic">{RATING_LABELS[ratings[cat.key]]}</span>
                         )}
-                        <StarRating
-                          value={ratings[cat.key] ?? 0}
-                          onChange={canEdit ? (v) => handleRatingChange(cat.key, v) : undefined}
-                          readonly={!canEdit}
-                          size="md"
-                          color="amber"
-                        />
                       </div>
                       {/* Tech Lead rating — shown to managers (readonly) and on completed view */}
                       {showTechLeadRow && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 w-16 text-right">Tech Lead</span>
-                          <StarRating
-                            value={techLeadRatings[cat.key] ?? 0}
-                            readonly
-                            size="md"
-                            color="sky"
-                          />
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 w-16 text-right">Tech Lead</span>
+                            <StarRating
+                              value={techLeadRatings[cat.key] ?? 0}
+                              readonly
+                              size="md"
+                              color="sky"
+                            />
+                          </div>
+                          {(techLeadRatings[cat.key] ?? 0) > 0 && (
+                            <span className="text-xs text-slate-400 italic">{RATING_LABELS[techLeadRatings[cat.key]]}</span>
+                          )}
                         </div>
                       )}
                       {/* Reviewer's own rating (editable while active, readonly when completed) */}
                       {(canReviewRatings || (isCompleted && reviewerRatings[cat.key])) && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-400 w-16 text-right">{reviewerLabel}</span>
-                          <StarRating
-                            value={reviewerRatings[cat.key] ?? 0}
-                            onChange={canReviewRatings ? (v) => handleReviewerRatingChange(cat.key, v) : undefined}
-                            readonly={!canReviewRatings}
-                            size="md"
-                            color="indigo"
-                          />
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 w-16 text-right">{reviewerLabel}</span>
+                            <StarRating
+                              value={reviewerRatings[cat.key] ?? 0}
+                              onChange={canReviewRatings ? (v) => handleReviewerRatingChange(cat.key, v) : undefined}
+                              readonly={!canReviewRatings}
+                              size="md"
+                              color="indigo"
+                            />
+                          </div>
+                          {(reviewerRatings[cat.key] ?? 0) > 0 && (
+                            <span className="text-xs text-slate-400 italic">{RATING_LABELS[reviewerRatings[cat.key]]}</span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -537,6 +629,47 @@ export default function AppraisalDetailPage() {
             </div>
           </div>
 
+          {/* Manager feedback — editable during manager_review, readonly when completed */}
+          {(canEditManagerFeedback || (isCompleted && appraisal.managerFeedback)) && (
+            <div className="card">
+              <div className="card-header">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-900">Manager's Final Feedback</h2>
+                    {canEditManagerFeedback && (
+                      <p className="text-sm text-slate-500 mt-0.5">
+                        Add your overall assessment for this appraisal
+                      </p>
+                    )}
+                  </div>
+                  {canEditManagerFeedback && (
+                    <span className="text-xs text-slate-400">
+                      {feedbackAutoSave === 'saving' && 'Saving…'}
+                      {feedbackAutoSave === 'saved' && (
+                        <span className="text-green-600">Saved</span>
+                      )}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="card-body">
+                {canEditManagerFeedback ? (
+                  <textarea
+                    value={managerFeedback}
+                    onChange={(e) => setManagerFeedback(e.target.value)}
+                    placeholder="Write your final feedback for this employee..."
+                    rows={5}
+                    className="input resize-none text-sm"
+                  />
+                ) : (
+                  <div className="prose-content text-sm text-slate-700 bg-slate-50 rounded-lg p-4 whitespace-pre-wrap leading-relaxed">
+                    {appraisal.managerFeedback || <span className="text-slate-400 italic">No feedback provided</span>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="flex gap-3">
             {canEdit && (
@@ -545,9 +678,17 @@ export default function AppraisalDetailPage() {
               </button>
             )}
             {canReviewRatings && (
-              <button onClick={handleSaveReview} disabled={isSavingReview} className="btn-secondary">
-                {isSavingReview ? <LoadingSpinner size="sm" /> : 'Save Review Ratings'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={handleSaveReview} disabled={isSavingReview} className="btn-secondary">
+                  {isSavingReview ? <LoadingSpinner size="sm" /> : 'Save Review Ratings'}
+                </button>
+                {autoSaveStatus === 'saving' && (
+                  <span className="text-xs text-slate-400">Saving…</span>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <span className="text-xs text-green-600">Saved</span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -655,6 +796,13 @@ export default function AppraisalDetailPage() {
                 </div>
               )}
 
+              {isOwnAppraisal && !isCompleted && appraisal.status !== 'draft' && (
+                <div className="pt-2 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 leading-relaxed">
+                    Comments are added by your tech lead and manager during the review process.
+                  </p>
+                </div>
+              )}
               {!isCompleted && !isOwnAppraisal && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <textarea

@@ -6,6 +6,8 @@ import {
   updateAppraisal,
   submitAppraisal,
   saveReviewerRatings,
+  saveManagerFeedback,
+  bulkCreateAppraisals,
   addComment,
   getComments,
   deleteAppraisal
@@ -69,6 +71,20 @@ router.get('/:id/comments', authenticate, getComments);
  * @access  Private (Tech Lead, Manager, Admin)
  */
 router.post('/:id/comments', authenticate, addComment);
+
+/**
+ * @route   PUT /api/appraisals/:id/manager-feedback
+ * @desc    Save manager's final feedback
+ * @access  Private (Manager, Admin)
+ */
+router.put('/:id/manager-feedback', authenticate, saveManagerFeedback);
+
+/**
+ * @route   POST /api/appraisals/bulk
+ * @desc    Bulk create appraisals for all active users
+ * @access  Private (Admin)
+ */
+router.post('/bulk', authenticate, isAdmin, bulkCreateAppraisals);
 
 /**
  * @route   DELETE /api/appraisals/:id
