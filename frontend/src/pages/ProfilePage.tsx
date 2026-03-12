@@ -15,6 +15,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
   tester: 'bg-yellow-100 text-yellow-700',
+  devops: 'bg-orange-100 text-orange-700',
 };
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
@@ -23,6 +24,7 @@ const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   tech_lead: 'Review appraisals for your technical team members.',
   developer: 'Submit and track your own performance appraisals.',
   tester: 'Submit and track your own performance appraisals.',
+  devops: 'Submit and track your own performance appraisals.',
 };
 
 export default function ProfilePage() {
