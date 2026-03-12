@@ -86,7 +86,7 @@ User.init(
       }
     },
     role: {
-      type: DataTypes.ENUM('admin', 'manager', 'tech_lead', 'developer', 'tester'),
+      type: DataTypes.ENUM('admin', 'manager', 'tech_lead', 'developer', 'tester', 'devops'),
       allowNull: false,
       defaultValue: USER_ROLES.DEVELOPER,
       validate: {

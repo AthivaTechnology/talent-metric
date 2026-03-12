@@ -394,13 +394,12 @@ export default function AppraisalDetailPage() {
     !isCompleted &&
     ((user?.role === 'tech_lead' &&
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
-      (user?.role === 'manager' && appraisal.status === 'manager_review') ||
-      user?.role === 'admin');
+      (user?.role === 'manager' && appraisal.status === 'manager_review'));
 
   const reviewerLabel = user?.role === 'manager' ? 'Manager' : 'Tech Lead';
   const canEditManagerFeedback =
     appraisal.status === 'manager_review' &&
-    (user?.role === 'manager' || user?.role === 'admin');
+    user?.role === 'manager';
   canReviewRatingsRef.current = canReviewRatings;
   canEditFeedbackRef.current = canEditManagerFeedback;
   const deadlineBadge = appraisal.deadline ? getDeadlineBadge(appraisal.deadline, isCompleted) : null;

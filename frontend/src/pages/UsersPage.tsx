@@ -19,6 +19,7 @@ import clsx from 'clsx';
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'developer', label: 'Developer' },
   { value: 'tester', label: 'Tester' },
+  { value: 'devops', label: 'DevOps' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
   { value: 'admin', label: 'Admin' },
@@ -30,6 +31,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
   tester: 'bg-amber-100 text-amber-700',
+  devops: 'bg-cyan-100 text-cyan-700',
 };
 
 export default function UsersPage() {
@@ -322,8 +324,8 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
     }
   );
 
-  const showTechLead = role === 'developer' || role === 'tester';
-  const showManager = role === 'developer' || role === 'tester' || role === 'tech_lead';
+  const showTechLead = role === 'developer' || role === 'tester' || role === 'devops';
+  const showManager = role === 'developer' || role === 'tester' || role === 'devops' || role === 'tech_lead';
 
   return (
     <Dialog open onClose={onClose} className="relative z-50">

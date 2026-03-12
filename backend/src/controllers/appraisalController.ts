@@ -588,8 +588,6 @@ export const saveReviewerRatings = async (req: AuthRequest, res: Response): Prom
         return;
       }
       raterRole = 'manager';
-    } else if (req.user.role === USER_ROLES.ADMIN) {
-      raterRole = appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW ? 'manager' : 'tech_lead';
     } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only tech leads and managers can submit reviewer ratings' });
       return;
@@ -882,7 +880,7 @@ export const saveManagerFeedback = async (req: AuthRequest, res: Response): Prom
         res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only provide feedback for your own reportees' });
         return;
       }
-    } else if (req.user.role !== USER_ROLES.ADMIN) {
+    } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only managers can provide final feedback' });
       return;
     }

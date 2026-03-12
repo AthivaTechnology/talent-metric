@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester';
+export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester' | 'devops';
 
 export type AppraisalStatus =
   | 'draft'
@@ -19,7 +19,10 @@ export type RatingCategory =
   | 'team_management'
   | 'team_leadership'
   | 'people_development'
-  | 'strategic_thinking';
+  | 'strategic_thinking'
+  | 'infrastructure_skills'
+  | 'automation_skills'
+  | 'reliability';
 
 export interface RatingCategoryConfig {
   key: RatingCategory;
@@ -55,6 +58,13 @@ export const ROLE_RATING_CONFIGS: Record<string, RatingCategoryConfig[]> = {
     { key: 'strategic_thinking', label: 'Strategic Thinking', desc: 'Planning and aligning with business goals' },
     { key: 'problem_solving', label: 'Problem Solving', desc: 'Resolving conflicts and organizational challenges' },
     { key: 'communication', label: 'Communication', desc: 'Stakeholder management and team communication' }
+  ],
+  devops: [
+    { key: 'infrastructure_skills', label: 'Infrastructure Skills', desc: 'Cloud, networking, and infrastructure proficiency' },
+    { key: 'automation_skills', label: 'Automation & CI/CD', desc: 'Pipeline design, automation, and deployment practices' },
+    { key: 'reliability', label: 'Reliability & Observability', desc: 'System uptime, monitoring, and incident response' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Diagnosing and resolving complex infrastructure issues' },
+    { key: 'communication', label: 'Communication', desc: 'Collaborating with dev teams and stakeholders' }
   ]
 };
 
