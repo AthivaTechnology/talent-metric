@@ -243,7 +243,8 @@ export default function AppraisalDetailPage() {
     setRatings(selfMap);
     setTechLeadRatings(tlMap);
     // Seed reviewer input from previously saved ratings matching the viewer's role
-    setReviewerRatings(user?.role === 'manager' ? managerMap : tlMap);
+    // Admin uses managerMap so completed view shows manager ratings in the reviewer slot (not TL again)
+    setReviewerRatings(user?.role === 'manager' || user?.role === 'admin' ? managerMap : tlMap);
     // Initialize manager feedback
     setManagerFeedback(appraisal.managerFeedback ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -396,7 +397,7 @@ export default function AppraisalDetailPage() {
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
       (user?.role === 'manager' && appraisal.status === 'manager_review'));
 
-  const reviewerLabel = user?.role === 'manager' ? 'Manager' : 'Tech Lead';
+  const reviewerLabel = user?.role === 'manager' || user?.role === 'admin' ? 'Manager' : 'Tech Lead';
   const canEditManagerFeedback =
     appraisal.status === 'manager_review' &&
     user?.role === 'manager';
