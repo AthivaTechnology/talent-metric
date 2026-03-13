@@ -27,6 +27,8 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       // Admin stats - all users
       stats.totalUsers = await User.count();
       stats.totalDevelopers = await User.count({ where: { role: USER_ROLES.DEVELOPER } });
+      stats.totalTesters = await User.count({ where: { role: USER_ROLES.TESTER } });
+      stats.totalDevOps = await User.count({ where: { role: USER_ROLES.DEVOPS } });
       stats.totalTechLeads = await User.count({ where: { role: USER_ROLES.TECH_LEAD } });
       stats.totalManagers = await User.count({ where: { role: USER_ROLES.MANAGER } });
 
@@ -130,8 +132,12 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       // Pending reviews (waiting for tech lead)
       stats.pendingReviews = stats.submittedAppraisals + stats.techLeadReviewAppraisals;
 
-    } else if (req.user.role === USER_ROLES.DEVELOPER) {
-      // Developer stats - their own appraisals
+    } else if (
+      req.user.role === USER_ROLES.DEVELOPER ||
+      req.user.role === USER_ROLES.TESTER ||
+      req.user.role === USER_ROLES.DEVOPS
+    ) {
+      // Developer/Tester/DevOps stats - their own appraisals
       const myAppraisals = await Appraisal.findAll({
         where: { userId: req.user.id, year: currentYear }
       });
@@ -194,9 +200,11 @@ export const getTeamAppraisals = async (req: AuthRequest, res: Response): Promis
       });
       userIds = teamMembers.map(m => m.id);
     } else if (req.user.role === USER_ROLES.ADMIN) {
-      // Admin can see all
+      // Admin can see all non-admin users
       const allUsers = await User.findAll({
-        where: { role: USER_ROLES.DEVELOPER },
+        where: {
+          role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] }
+        },
         attributes: ['id']
       });
       userIds = allUsers.map(u => u.id);
@@ -255,7 +263,11 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    if (req.user.role !== USER_ROLES.MANAGER && req.user.role !== USER_ROLES.ADMIN) {
+    if (
+      req.user.role !== USER_ROLES.MANAGER &&
+      req.user.role !== USER_ROLES.ADMIN &&
+      req.user.role !== USER_ROLES.TECH_LEAD
+    ) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,
         message: 'Access denied'
@@ -266,7 +278,13 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
     const { year = new Date().getFullYear() } = req.query;
     let userIds: number[] = [];
 
-    if (req.user.role === USER_ROLES.MANAGER) {
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      const teamMembers = await User.findAll({
+        where: { techLeadId: req.user.id },
+        attributes: ['id']
+      });
+      userIds = teamMembers.map(m => m.id);
+    } else if (req.user.role === USER_ROLES.MANAGER) {
       const reportees = await User.findAll({
         where: { managerId: req.user.id },
         attributes: ['id']
@@ -274,16 +292,19 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
       userIds = reportees.map(r => r.id);
     } else {
       const allUsers = await User.findAll({
-        where: { role: USER_ROLES.DEVELOPER },
+        where: {
+          role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] }
+        },
         attributes: ['id']
       });
       userIds = allUsers.map(u => u.id);
     }
 
     // Get all ratings for completed appraisals
+    const effectiveUserIds = userIds.length > 0 ? userIds : [-1];
     const appraisals = await Appraisal.findAll({
       where: {
-        userId: { [Op.in]: userIds },
+        userId: { [Op.in]: effectiveUserIds },
         year: parseInt(year as string),
         status: APPRAISAL_STATUS.COMPLETED
       },
@@ -295,21 +316,16 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
       ]
     });
 
-    // Calculate average ratings by category
-    const ratingsByCategory: any = {
-      technical_skills: [],
-      code_quality: [],
-      ownership: [],
-      problem_solving: [],
-      communication: []
-    };
+    // Calculate average ratings by category (dynamic — works for all roles)
+    const ratingsByCategory: Record<string, number[]> = {};
 
     appraisals.forEach(appraisal => {
       if ((appraisal as any).ratings) {
         (appraisal as any).ratings.forEach((rating: any) => {
-          if (ratingsByCategory[rating.category]) {
-            ratingsByCategory[rating.category].push(rating.rating);
+          if (!ratingsByCategory[rating.category]) {
+            ratingsByCategory[rating.category] = [];
           }
+          ratingsByCategory[rating.category].push(rating.rating);
         });
       }
     });
@@ -317,18 +333,14 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
     const averageRatings: any = {};
     Object.keys(ratingsByCategory).forEach(category => {
       const ratings = ratingsByCategory[category];
-      if (ratings.length > 0) {
-        const sum = ratings.reduce((a: number, b: number) => a + b, 0);
-        averageRatings[category] = parseFloat((sum / ratings.length).toFixed(2));
-      } else {
-        averageRatings[category] = 0;
-      }
+      const sum = ratings.reduce((a: number, b: number) => a + b, 0);
+      averageRatings[category] = parseFloat((sum / ratings.length).toFixed(2));
     });
 
     // Status distribution
     const statusDistribution = await Appraisal.findAll({
       where: {
-        userId: { [Op.in]: userIds },
+        userId: { [Op.in]: effectiveUserIds },
         year: parseInt(year as string)
       },
       attributes: [
@@ -346,7 +358,7 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
           model: Appraisal,
           as: 'appraisal',
           where: {
-            userId: { [Op.in]: userIds },
+            userId: { [Op.in]: effectiveUserIds },
             year: parseInt(year as string)
           },
           attributes: []

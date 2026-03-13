@@ -6,7 +6,9 @@ import {
   updateUser,
   deleteUser,
   getTechLeads,
-  getManagers
+  getManagers,
+  deactivateUser,
+  activateUser
 } from '../controllers/userController';
 import { authenticate, isAdmin } from '../middleware/auth';
 
@@ -60,5 +62,19 @@ router.put('/:id', authenticate, isAdmin, updateUser);
  * @access  Private/Admin
  */
 router.delete('/:id', authenticate, isAdmin, deleteUser);
+
+/**
+ * @route   PATCH /api/users/:id/deactivate
+ * @desc    Deactivate user (soft delete)
+ * @access  Private/Admin
+ */
+router.patch('/:id/deactivate', authenticate, isAdmin, deactivateUser);
+
+/**
+ * @route   PATCH /api/users/:id/activate
+ * @desc    Activate user
+ * @access  Private/Admin
+ */
+router.patch('/:id/activate', authenticate, isAdmin, activateUser);
 
 export default router;

@@ -32,7 +32,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
 
     const { rows: users, count: total } = await User.findAndCountAll({
       where: whereClause,
-      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId', 'createdAt'],
+      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId', 'isActive', 'createdAt'],
       include: [
         {
           model: User,
@@ -445,6 +445,61 @@ export const getManagers = async (_req: AuthRequest, res: Response): Promise<voi
   }
 };
 
+/**
+ * @desc    Deactivate a user (soft delete)
+ * @route   PATCH /api/users/:id/deactivate
+ * @access  Private/Admin
+ */
+export const deactivateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.USER_NOT_FOUND });
+      return;
+    }
+
+    if (req.user && req.user.id === parseInt(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'You cannot deactivate your own account' });
+      return;
+    }
+
+    user.isActive = false;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'User deactivated successfully' });
+  } catch (error) {
+    console.error('Deactivate user error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error deactivating user' });
+  }
+};
+
+/**
+ * @desc    Activate a user
+ * @route   PATCH /api/users/:id/activate
+ * @access  Private/Admin
+ */
+export const activateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.USER_NOT_FOUND });
+      return;
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'User activated successfully' });
+  } catch (error) {
+    console.error('Activate user error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error activating user' });
+  }
+};
+
 export default {
   getAllUsers,
   getUserById,
@@ -452,5 +507,7 @@ export default {
   updateUser,
   deleteUser,
   getTechLeads,
-  getManagers
+  getManagers,
+  deactivateUser,
+  activateUser
 };

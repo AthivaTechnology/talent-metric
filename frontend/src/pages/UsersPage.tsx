@@ -6,6 +6,8 @@ import {
   PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
+  NoSymbolIcon,
+  CheckCircleIcon as CheckCircleOutlineIcon,
 } from '@heroicons/react/24/outline';
 import { Dialog } from '@headlessui/react';
 import { userService } from '@services/userService';
@@ -64,6 +66,22 @@ export default function UsersPage() {
       queryClient.invalidateQueries(['users']);
     },
     onError: (err) => { toast.error(getErrorMessage(err, 'Failed to delete user')); },
+  });
+
+  const deactivateMutation = useMutation((id: number | string) => userService.deactivateUser(id), {
+    onSuccess: () => {
+      toast.success('User deactivated');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: (err) => { toast.error(getErrorMessage(err, 'Failed to deactivate user')); },
+  });
+
+  const activateMutation = useMutation((id: number | string) => userService.activateUser(id), {
+    onSuccess: () => {
+      toast.success('User activated');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: (err) => { toast.error(getErrorMessage(err, 'Failed to activate user')); },
   });
 
   return (
@@ -127,6 +145,7 @@ export default function UsersPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Status</th>
                   <th>Reports To</th>
                   <th>Joined</th>
                   <th>Actions</th>
@@ -154,6 +173,16 @@ export default function UsersPage() {
                         {u.role.replace('_', ' ')}
                       </span>
                     </td>
+                    <td>
+                      <span className={clsx(
+                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                        u.isActive !== false
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-slate-100 text-slate-500'
+                      )}>
+                        {u.isActive !== false ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
                     <td className="text-slate-500">
                       {u.manager?.name ?? u.techLead?.name ?? '—'}
                     </td>
@@ -169,6 +198,25 @@ export default function UsersPage() {
                         >
                           <PencilSquareIcon className="w-4 h-4" />
                         </button>
+                        {u.isActive !== false ? (
+                          <button
+                            onClick={() => deactivateMutation.mutate(u.id)}
+                            disabled={deactivateMutation.isLoading}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600"
+                            title="Deactivate"
+                          >
+                            <NoSymbolIcon className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => activateMutation.mutate(u.id)}
+                            disabled={activateMutation.isLoading}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-600"
+                            title="Activate"
+                          >
+                            <CheckCircleOutlineIcon className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeleteTarget(u)}
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"

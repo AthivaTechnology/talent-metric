@@ -11,6 +11,7 @@ import {
   ChatBubbleLeftEllipsisIcon,
   CheckCircleIcon,
   PaperAirplaneIcon,
+  ArrowUturnLeftIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
@@ -195,10 +196,15 @@ export default function AppraisalDetailPage() {
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [answersAutoSave, setAnswersAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [managerFeedback, setManagerFeedback] = useState('');
   const [feedbackAutoSave, setFeedbackAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [returnReason, setReturnReason] = useState('');
+  const [showReturnModal, setShowReturnModal] = useState(false);
   const canReviewRatingsRef = useRef(false);
   const canEditFeedbackRef = useRef(false);
+  const canEditRef = useRef(false);
+  const isInitializedRef = useRef(false);
 
   const appraisalQuery = useQuery(
     ['appraisal', id],
@@ -225,6 +231,7 @@ export default function AppraisalDetailPage() {
   // Initialize state from appraisal data
   useEffect(() => {
     if (!appraisal) return;
+    isInitializedRef.current = false;
 
     const answerMap: Record<string, string> = {};
     appraisal.responses.forEach((r) => {
@@ -247,6 +254,8 @@ export default function AppraisalDetailPage() {
     setReviewerRatings(user?.role === 'manager' || user?.role === 'admin' ? managerMap : tlMap);
     // Initialize manager feedback
     setManagerFeedback(appraisal.managerFeedback ?? '');
+    // Mark as initialized after a tick so auto-save effects don't fire on load
+    setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appraisal?.id]);
 
@@ -268,6 +277,24 @@ export default function AppraisalDetailPage() {
         queryClient.invalidateQueries(['appraisal', id]);
       },
       onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save')); },
+    }
+  );
+
+  // Silent auto-save — no toast, uses same payload as saveMutation
+  const autoSaveMutation = useMutation(
+    () =>
+      appraisalService.updateAppraisal(id!, {
+        responses: Object.entries(answers).map(([questionId, answer]) => ({
+          questionId,
+          answer,
+        })),
+        ratings: Object.entries(ratings).map(([category, rating]) => ({
+          category: category as RatingCategory,
+          rating: rating as number,
+        })),
+      }),
+    {
+      onError: () => { setAnswersAutoSave('idle'); },
     }
   );
 
@@ -322,6 +349,33 @@ export default function AppraisalDetailPage() {
       onError: (err) => { toast.error(getErrorMessage(err, 'Failed to save feedback')); },
     }
   );
+
+  const returnMutation = useMutation(
+    () => appraisalService.returnAppraisal(id!, returnReason),
+    {
+      onSuccess: () => {
+        toast.success('Appraisal returned to developer for revision');
+        setShowReturnModal(false);
+        setReturnReason('');
+        queryClient.invalidateQueries(['appraisal', id]);
+        queryClient.invalidateQueries(['appraisals']);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to return appraisal')); },
+    }
+  );
+
+  // Auto-save questionnaire answers 2s after last change (Fix 4)
+  useEffect(() => {
+    if (!canEditRef.current || !isInitializedRef.current) return;
+    setAnswersAutoSave('saving');
+    const timer = setTimeout(() => {
+      autoSaveMutation.mutate();
+      setAnswersAutoSave('saved');
+      setTimeout(() => setAnswersAutoSave('idle'), 3000);
+    }, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, ratings]);
 
   // Auto-save reviewer ratings 2s after last change
   useEffect(() => {
@@ -397,12 +451,22 @@ export default function AppraisalDetailPage() {
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
       (user?.role === 'manager' && appraisal.status === 'manager_review'));
 
+  const canReturn =
+    !isOwnAppraisal &&
+    !isCompleted &&
+    !isDraft &&
+    ((user?.role === 'tech_lead' &&
+        (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
+      (user?.role === 'manager' && appraisal.status === 'manager_review') ||
+      user?.role === 'admin');
+
   const reviewerLabel = user?.role === 'manager' || user?.role === 'admin' ? 'Manager' : 'Tech Lead';
   const canEditManagerFeedback =
     appraisal.status === 'manager_review' &&
     user?.role === 'manager';
   canReviewRatingsRef.current = canReviewRatings;
   canEditFeedbackRef.current = canEditManagerFeedback;
+  canEditRef.current = canEdit;
   const deadlineBadge = appraisal.deadline ? getDeadlineBadge(appraisal.deadline, isCompleted) : null;
 
   // Show TL's ratings as a readonly row when the manager is reviewing or the appraisal is completed
@@ -671,11 +735,17 @@ export default function AppraisalDetailPage() {
           )}
 
           {/* Action buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             {canEdit && (
               <button onClick={handleSave} disabled={isSaving} className="btn-secondary">
                 {isSaving ? <LoadingSpinner size="sm" /> : 'Save Draft'}
               </button>
+            )}
+            {canEdit && answersAutoSave === 'saving' && (
+              <span className="text-xs text-slate-400">Auto-saving…</span>
+            )}
+            {canEdit && answersAutoSave === 'saved' && (
+              <span className="text-xs text-green-600">Auto-saved</span>
             )}
             {canReviewRatings && (
               <div className="flex items-center gap-3">
@@ -760,6 +830,15 @@ export default function AppraisalDetailPage() {
                   )}
                 </button>
               )}
+              {canReturn && (
+                <button
+                  onClick={() => setShowReturnModal(true)}
+                  className="btn-secondary w-full mt-2 text-amber-700 border-amber-200 hover:bg-amber-50"
+                >
+                  <ArrowUturnLeftIcon className="w-4 h-4" />
+                  Return for Revision
+                </button>
+              )}
             </div>
           </div>
 
@@ -796,19 +875,12 @@ export default function AppraisalDetailPage() {
                 </div>
               )}
 
-              {isOwnAppraisal && !isCompleted && appraisal.status !== 'draft' && (
-                <div className="pt-2 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2 leading-relaxed">
-                    Comments are added by your tech lead and manager during the review process.
-                  </p>
-                </div>
-              )}
-              {!isCompleted && !isOwnAppraisal && (
+              {(!isCompleted && (isOwnAppraisal ? appraisal.status !== 'draft' : true)) && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">
                   <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="Add a comment..."
+                    placeholder={isOwnAppraisal ? 'Reply to reviewer comments...' : 'Add a comment...'}
                     rows={3}
                     className="input resize-none text-sm"
                   />
@@ -817,7 +889,7 @@ export default function AppraisalDetailPage() {
                     disabled={!newComment.trim() || commentMutation.isLoading}
                     className="btn-primary btn-sm w-full"
                   >
-                    {commentMutation.isLoading ? <LoadingSpinner size="sm" /> : 'Add Comment'}
+                    {commentMutation.isLoading ? <LoadingSpinner size="sm" /> : isOwnAppraisal ? 'Send Reply' : 'Add Comment'}
                   </button>
                 </div>
               )}
@@ -825,6 +897,46 @@ export default function AppraisalDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Return for Revision Modal */}
+      {showReturnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">Return for Revision</h3>
+            <p className="text-sm text-slate-500">
+              The appraisal will be returned to <strong>{appraisal.user?.name}</strong> as a draft for revision.
+              Add an optional reason (at least 10 characters to include it as a comment).
+            </p>
+            <textarea
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="Reason for returning (optional, min 10 chars to save as comment)..."
+              rows={4}
+              className="input resize-none text-sm w-full"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowReturnModal(false); setReturnReason(''); }}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => returnMutation.mutate()}
+                disabled={returnMutation.isLoading}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-amber-500 text-white hover:bg-amber-600 transition-colors disabled:opacity-50"
+              >
+                {returnMutation.isLoading ? <LoadingSpinner size="sm" /> : (
+                  <>
+                    <ArrowUturnLeftIcon className="w-4 h-4" />
+                    Confirm Return
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

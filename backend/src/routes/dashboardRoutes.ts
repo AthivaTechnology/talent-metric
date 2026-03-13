@@ -5,7 +5,7 @@ import {
   getTeamAnalytics,
   getTrend
 } from '../controllers/dashboardController';
-import { authenticate, isManagerOrAdmin, isTechLeadOrAbove } from '../middleware/auth';
+import { authenticate, isTechLeadOrAbove } from '../middleware/auth';
 
 const router = Router();
 
@@ -26,9 +26,9 @@ router.get('/team', authenticate, isTechLeadOrAbove, getTeamAppraisals);
 /**
  * @route   GET /api/dashboard/analytics
  * @desc    Get team analytics
- * @access  Private (Manager, Admin)
+ * @access  Private (Tech Lead, Manager, Admin)
  */
-router.get('/analytics', authenticate, isManagerOrAdmin, getTeamAnalytics);
+router.get('/analytics', authenticate, isTechLeadOrAbove, getTeamAnalytics);
 
 /**
  * @route   GET /api/dashboard/trend

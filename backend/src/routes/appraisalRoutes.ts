@@ -8,13 +8,22 @@ import {
   saveReviewerRatings,
   saveManagerFeedback,
   bulkCreateAppraisals,
+  returnAppraisal,
+  exportAppraisals,
   addComment,
   getComments,
   deleteAppraisal
 } from '../controllers/appraisalController';
-import { authenticate, isAdmin } from '../middleware/auth';
+import { authenticate, isAdmin, isTechLeadOrAbove } from '../middleware/auth';
 
 const router = Router();
+
+/**
+ * @route   GET /api/appraisals/export
+ * @desc    Export appraisals as CSV
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.get('/export', authenticate, isTechLeadOrAbove, exportAppraisals);
 
 /**
  * @route   GET /api/appraisals
@@ -78,6 +87,13 @@ router.post('/:id/comments', authenticate, addComment);
  * @access  Private (Manager, Admin)
  */
 router.put('/:id/manager-feedback', authenticate, saveManagerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/return
+ * @desc    Return appraisal to developer for revision
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.post('/:id/return', authenticate, isTechLeadOrAbove, returnAppraisal);
 
 /**
  * @route   POST /api/appraisals/bulk

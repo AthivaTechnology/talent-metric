@@ -73,4 +73,17 @@ export const appraisalService = {
     const res = await api.post('/appraisals/bulk', payload);
     return { ...res.data.data, message: res.data.message };
   },
+
+  async returnAppraisal(id: string, reason?: string): Promise<Appraisal> {
+    const res = await api.post(`/appraisals/${id}/return`, { reason });
+    return res.data.data;
+  },
+
+  async exportAppraisals(params?: { year?: number }): Promise<Blob> {
+    const res = await api.get('/appraisals/export', {
+      params,
+      responseType: 'blob',
+    });
+    return res.data;
+  },
 };

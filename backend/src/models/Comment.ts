@@ -85,8 +85,8 @@ Comment.init(
       allowNull: false,
       validate: {
         isIn: {
-          args: [['tech_lead_review', 'manager_review']],
-          msg: 'Stage must be either tech_lead_review or manager_review'
+          args: [['tech_lead_review', 'manager_review', 'developer_reply', 'returned']],
+          msg: 'Invalid comment stage'
         }
       }
     }

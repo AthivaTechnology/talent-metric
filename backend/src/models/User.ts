@@ -11,11 +11,12 @@ interface UserAttributes {
   role: UserRole;
   techLeadId?: number | null;
   managerId?: number | null;
+  isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'techLeadId' | 'managerId'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'techLeadId' | 'managerId' | 'isActive'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   public id!: number;
@@ -25,6 +26,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public role!: UserRole;
   public techLeadId!: number | null;
   public managerId!: number | null;
+  public isActive!: boolean;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -113,6 +115,12 @@ User.init(
         key: 'id'
       },
       field: 'manager_id'
+    },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: 'is_active'
     }
   },
   {

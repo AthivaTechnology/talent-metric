@@ -81,6 +81,7 @@ export interface User {
   managerId?: number | null;
   techLead?: Pick<User, 'id' | 'name' | 'email'>;
   manager?: Pick<User, 'id' | 'name' | 'email'>;
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -148,6 +149,8 @@ export interface DashboardStats {
   // admin
   totalUsers?: number;
   totalDevelopers?: number;
+  totalTesters?: number;
+  totalDevOps?: number;
   totalTechLeads?: number;
   totalManagers?: number;
   totalAppraisals?: number;

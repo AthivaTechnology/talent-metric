@@ -675,6 +675,16 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       req.user.role === USER_ROLES.MANAGER && appraisal.userId === req.user.id
     ) {
       stage = 'manager_review';
+    } else if (appraisal.userId === req.user.id) {
+      // Developer/Tester/DevOps replying on their own appraisal (only during active review)
+      if (appraisal.status === APPRAISAL_STATUS.DRAFT || appraisal.status === APPRAISAL_STATUS.COMPLETED) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({
+          success: false,
+          message: 'You can only reply when your appraisal is under review'
+        });
+        return;
+      }
+      stage = 'developer_reply';
     } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,
@@ -926,7 +936,7 @@ export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Pro
     }
 
     const users = await User.findAll({
-      where: { role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] } }
+      where: { role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] } }
     });
 
     const existingAppraisals = await Appraisal.findAll({
@@ -965,6 +975,177 @@ export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Pro
   }
 };
 
+/**
+ * @desc    Return appraisal to developer for revision
+ * @route   POST /api/appraisals/:id/return
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const returnAppraisal = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const appraisal = await Appraisal.findByPk(id, {
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const appraisalUser = (appraisal as any).user as User | null;
+
+    // Validate who can return and from which status
+    const returnableStatuses = [
+      APPRAISAL_STATUS.SUBMITTED,
+      APPRAISAL_STATUS.TECH_LEAD_REVIEW,
+      APPRAISAL_STATUS.MANAGER_REVIEW
+    ];
+
+    if (!returnableStatuses.includes(appraisal.status as any)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Cannot return appraisal in "${appraisal.status}" status`
+      });
+      return;
+    }
+
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      if (!appraisalUser || appraisalUser.techLeadId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only return appraisals of your team members' });
+        return;
+      }
+      if (appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Appraisal is already in manager review' });
+        return;
+      }
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      if (!appraisalUser || appraisalUser.managerId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only return appraisals of your reportees' });
+        return;
+      }
+    } else if (req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    appraisal.status = APPRAISAL_STATUS.DRAFT;
+    appraisal.submittedAt = null as any;
+    appraisal.techLeadReviewedAt = null as any;
+    appraisal.managerReviewedAt = null as any;
+    await appraisal.save();
+
+    // Add a system comment with the reason if provided
+    if (reason && reason.trim().length >= 10) {
+      await Comment.create({
+        appraisalId: appraisal.id,
+        userId: req.user.id,
+        comment: `[Returned for revision] ${reason.trim()}`,
+        stage: 'returned'
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Appraisal returned to developer for revision',
+      data: appraisal
+    });
+  } catch (error) {
+    console.error('Return appraisal error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error returning appraisal' });
+  }
+};
+
+/**
+ * @desc    Export appraisals as CSV
+ * @route   GET /api/appraisals/export
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const exportAppraisals = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER || req.user.role === USER_ROLES.DEVOPS) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { year } = req.query;
+    const whereClause: any = {};
+    if (year) whereClause.year = parseInt(year as string);
+
+    let userIds: number[] | null = null;
+
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      const teamMembers = await User.findAll({ where: { techLeadId: req.user.id }, attributes: ['id'] });
+      userIds = teamMembers.map(m => m.id);
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      const reportees = await User.findAll({ where: { managerId: req.user.id }, attributes: ['id'] });
+      userIds = reportees.map(r => r.id);
+    }
+
+    if (userIds !== null) {
+      whereClause.userId = { [Op.in]: userIds };
+    }
+
+    const appraisals = await Appraisal.findAll({
+      where: whereClause,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'email', 'role'] },
+        { model: Rating, as: 'ratings' }
+      ],
+      order: [['year', 'DESC'], ['updatedAt', 'DESC']]
+    });
+
+    // Build CSV
+    const rows: string[] = [
+      'ID,Year,Employee,Email,Role,Status,Deadline,Avg Self Rating,Submitted At,Completed At'
+    ];
+
+    appraisals.forEach(appraisal => {
+      const user = (appraisal as any).user;
+      const ratings = ((appraisal as any).ratings as any[]).filter(r => !r.raterRole || r.raterRole === 'self');
+      const avgRating = ratings.length > 0
+        ? (ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length).toFixed(2)
+        : '';
+
+      const escape = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      rows.push([
+        appraisal.id,
+        appraisal.year,
+        escape(user?.name ?? ''),
+        escape(user?.email ?? ''),
+        escape(user?.role ?? ''),
+        appraisal.status,
+        appraisal.deadline ? new Date(appraisal.deadline).toISOString().split('T')[0] : '',
+        avgRating,
+        appraisal.submittedAt ? new Date(appraisal.submittedAt).toISOString().split('T')[0] : '',
+        appraisal.completedAt ? new Date(appraisal.completedAt).toISOString().split('T')[0] : ''
+      ].join(','));
+    });
+
+    const csv = rows.join('\n');
+    const filename = `appraisals_${year || 'all'}_${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(HTTP_STATUS.OK).send(csv);
+  } catch (error) {
+    console.error('Export appraisals error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error exporting appraisals' });
+  }
+};
+
 export default {
   getAllAppraisals,
   getAppraisalById,
@@ -974,6 +1155,8 @@ export default {
   saveReviewerRatings,
   saveManagerFeedback,
   bulkCreateAppraisals,
+  returnAppraisal,
+  exportAppraisals,
   addComment,
   getComments,
   deleteAppraisal

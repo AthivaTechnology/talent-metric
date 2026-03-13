@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { PlusIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
 import { userService } from '@services/userService';
@@ -70,6 +70,21 @@ export default function AppraisalsPage() {
   );
 
   const canCreate = user && ROLES_THAT_CAN_CREATE.includes(user.role);
+  const canExport = user && ['admin', 'manager', 'tech_lead'].includes(user.role);
+
+  const handleExport = async () => {
+    try {
+      const blob = await appraisalService.exportAppraisals(yearFilter ? { year: yearFilter as number } : undefined);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `appraisals_${yearFilter || 'all'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export appraisals');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -81,23 +96,31 @@ export default function AppraisalsPage() {
             {data ? `${data.total} total appraisals` : 'Loading...'}
           </p>
         </div>
-        {canCreate && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowBulkModal(true)}
-              className="btn-secondary"
-            >
-              Bulk Create
+        <div className="flex items-center gap-2">
+          {canExport && (
+            <button onClick={handleExport} className="btn-secondary">
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              Export CSV
             </button>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary"
-            >
-              <PlusIcon className="w-4 h-4" />
-              New Appraisal
-            </button>
-          </div>
-        )}
+          )}
+          {canCreate && (
+            <>
+              <button
+                onClick={() => setShowBulkModal(true)}
+                className="btn-secondary"
+              >
+                Bulk Create
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="btn-primary"
+              >
+                <PlusIcon className="w-4 h-4" />
+                New Appraisal
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filters */}

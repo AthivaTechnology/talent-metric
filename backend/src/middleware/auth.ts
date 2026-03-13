@@ -40,13 +40,21 @@ export const authenticate = async (
 
     // Get user from database
     const user = await User.findByPk(decoded.id, {
-      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId']
+      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId', 'isActive']
     });
 
     if (!user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         message: ERROR_MESSAGES.USER_NOT_FOUND
+      });
+      return;
+    }
+
+    if (user.isActive === false) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact an administrator.'
       });
       return;
     }

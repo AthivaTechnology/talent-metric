@@ -53,4 +53,12 @@ export const userService = {
     const res = await api.get('/users/managers');
     return res.data.data;
   },
+
+  async deactivateUser(id: number | string): Promise<void> {
+    await api.patch(`/users/${id}/deactivate`);
+  },
+
+  async activateUser(id: number | string): Promise<void> {
+    await api.patch(`/users/${id}/activate`);
+  },
 };

@@ -52,6 +52,7 @@ function buildStatCards(stats: DashboardStats, role: string) {
   if (role === 'admin') {
     const pending = (stats.draftAppraisals ?? 0) + (stats.submittedAppraisals ?? 0)
       + (stats.techLeadReviewAppraisals ?? 0) + (stats.managerReviewAppraisals ?? 0);
+    const totalICs = (stats.totalDevelopers ?? 0) + (stats.totalTesters ?? 0) + (stats.totalDevOps ?? 0);
     cards.push(
       {
         label: 'Total Appraisals',
@@ -61,8 +62,8 @@ function buildStatCards(stats: DashboardStats, role: string) {
         bgColor: 'bg-indigo-50',
       },
       {
-        label: 'Total Developers',
-        value: stats.totalDevelopers ?? 0,
+        label: 'Devs / Testers / DevOps',
+        value: totalICs,
         icon: UserGroupIcon,
         color: 'text-purple-600',
         bgColor: 'bg-purple-50',
@@ -82,7 +83,7 @@ function buildStatCards(stats: DashboardStats, role: string) {
         bgColor: 'bg-amber-50',
       }
     );
-  } else if (role === 'developer') {
+  } else if (role === 'developer' || role === 'tester' || role === 'devops') {
     cards.push(
       {
         label: 'My Appraisals',
@@ -168,7 +169,7 @@ export default function DashboardPage() {
     ['dashboard-analytics'],
     dashboardService.getTeamAnalytics,
     {
-      enabled: user?.role !== 'developer',
+      enabled: user?.role !== 'developer' && user?.role !== 'tester' && user?.role !== 'devops',
       staleTime: 60_000,
     }
   );
@@ -228,7 +229,7 @@ export default function DashboardPage() {
               <table className="table">
                 <thead>
                   <tr>
-                    {user?.role !== 'developer' && <th>Developer</th>}
+                    {user?.role !== 'developer' && user?.role !== 'tester' && user?.role !== 'devops' && <th>Employee</th>}
                     <th>Year</th>
                     <th>Status</th>
                     <th>Deadline</th>
@@ -238,7 +239,7 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-slate-100">
                   {appraisalsQuery.data?.appraisals.map((a) => (
                     <tr key={a.id}>
-                      {user?.role !== 'developer' && (
+                      {user?.role !== 'developer' && user?.role !== 'tester' && user?.role !== 'devops' && (
                         <td className="font-medium">{a.user?.name ?? '—'}</td>
                       )}
                       <td>{a.year}</td>
@@ -267,7 +268,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Analytics chart */}
-        {user?.role !== 'developer' && (
+        {user?.role !== 'developer' && user?.role !== 'tester' && user?.role !== 'devops' && (
           <div className="card">
             <div className="card-header">
               <h2 className="text-base font-semibold text-slate-900">Avg Ratings by Category</h2>
