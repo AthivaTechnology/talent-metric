@@ -116,6 +116,15 @@ function AnswerEditor({ questionId, questionText, initialValue, onChange }: Answ
     },
   });
 
+  // Sync editor content when initialValue is updated externally (e.g. fresh data loaded
+  // after navigation). emitUpdate=false prevents triggering onUpdate → no feedback loop.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    if (editor.getHTML() !== initialValue) {
+      editor.commands.setContent(initialValue || '', false);
+    }
+  }, [initialValue, editor]);
+
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-slate-800">{questionText}</p>
