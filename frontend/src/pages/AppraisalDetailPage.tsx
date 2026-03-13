@@ -259,7 +259,7 @@ export default function AppraisalDetailPage() {
     // Mark as initialized after a tick so auto-save effects don't fire on load
     setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appraisal?.id]);
+  }, [appraisal?.id, appraisalQuery.dataUpdatedAt]);
 
   const saveMutation = useMutation(
     () =>
