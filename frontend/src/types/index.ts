@@ -134,6 +134,7 @@ export interface Appraisal {
   ratings: Rating[];
   comments?: Comment[];
   managerFeedback?: string | null;
+  consolidatedRating?: number | null;
   createdAt: string;
   updatedAt: string;
 }

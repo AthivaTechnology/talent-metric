@@ -198,6 +198,7 @@ export default function AppraisalDetailPage() {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [answersAutoSave, setAnswersAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [managerFeedback, setManagerFeedback] = useState('');
+  const [managerConsolidatedRating, setManagerConsolidatedRating] = useState<number>(0);
   const [feedbackAutoSave, setFeedbackAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [returnReason, setReturnReason] = useState('');
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -252,8 +253,9 @@ export default function AppraisalDetailPage() {
     // Seed reviewer input from previously saved ratings matching the viewer's role
     // Admin uses managerMap so completed view shows manager ratings in the reviewer slot (not TL again)
     setReviewerRatings(user?.role === 'manager' || user?.role === 'admin' ? managerMap : tlMap);
-    // Initialize manager feedback
+    // Initialize manager feedback and consolidated rating
     setManagerFeedback(appraisal.managerFeedback ?? '');
+    setManagerConsolidatedRating(appraisal.consolidatedRating ?? 0);
     // Mark as initialized after a tick so auto-save effects don't fire on load
     setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,7 +343,7 @@ export default function AppraisalDetailPage() {
   );
 
   const saveManagerFeedbackMutation = useMutation(
-    () => appraisalService.saveManagerFeedback(id!, managerFeedback),
+    () => appraisalService.saveManagerFeedback(id!, managerFeedback, managerConsolidatedRating || null),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(['appraisal', id]);
@@ -401,7 +403,7 @@ export default function AppraisalDetailPage() {
     }, 2000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [managerFeedback]);
+  }, [managerFeedback, managerConsolidatedRating]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -435,13 +437,18 @@ export default function AppraisalDetailPage() {
   const isDraft = appraisal.status === 'draft';
   const isCompleted = appraisal.status === 'completed';
   const isOwnAppraisal = String(appraisal.userId) === String(user?.id);
+  const isDeveloperOrTester = user?.role === 'developer' || user?.role === 'tester';
   const canEdit = isOwnAppraisal && isDraft;
   const canAdvance =
     !isCompleted &&
     ((isOwnAppraisal && isDraft) ||
+      // Tech lead can advance own submitted appraisal (skips TL review) or review a team member's
       (user?.role === 'tech_lead' &&
         (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
-      (user?.role === 'manager' && appraisal.status === 'manager_review') ||
+      // Manager can advance own submitted appraisal (skips TL review) or finalize a reportee's
+      (user?.role === 'manager' &&
+        (appraisal.status === 'manager_review' ||
+          (isOwnAppraisal && appraisal.status === 'submitted'))) ||
       user?.role === 'admin');
 
   const canReviewRatings =
@@ -464,6 +471,8 @@ export default function AppraisalDetailPage() {
   const canEditManagerFeedback =
     appraisal.status === 'manager_review' &&
     user?.role === 'manager';
+  const consolidatedRatingMissing =
+    appraisal.status === 'manager_review' && user?.role === 'manager' && !managerConsolidatedRating;
   canReviewRatingsRef.current = canReviewRatings;
   canEditFeedbackRef.current = canEditManagerFeedback;
   canEditRef.current = canEdit;
@@ -475,6 +484,7 @@ export default function AppraisalDetailPage() {
   const showTechLeadRow =
     Object.keys(techLeadRatings).length > 0 &&
     user?.role !== 'tech_lead' &&
+    !(isOwnAppraisal && isDeveloperOrTester) &&
     (!isOwnAppraisal
       ? (user?.role === 'manager' && canReviewRatings) || isCompleted
       : isCompleted);
@@ -488,7 +498,13 @@ export default function AppraisalDetailPage() {
     await reviewerRatingsMutation.mutateAsync().finally(() => setIsSavingReview(false));
   };
 
-  const advanceLabel = ADVANCE_LABELS[appraisal.status] ?? 'Advance';
+  // Tech leads and managers skip the TL review stage for their own appraisal
+  const skipsTechLeadReview =
+    appraisal.status === 'submitted' &&
+    (appraiseeRole === 'tech_lead' || appraiseeRole === 'manager');
+  const advanceLabel = skipsTechLeadReview
+    ? 'Move to Manager Review'
+    : ADVANCE_LABELS[appraisal.status] ?? 'Advance';
 
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl">
@@ -602,10 +618,12 @@ export default function AppraisalDetailPage() {
                       ? 'Rate yourself honestly on each dimension (1–5)'
                       : canReviewRatings
                       ? `Your ratings as ${reviewerLabel} alongside self-ratings`
+                      : isDeveloperOrTester
+                      ? 'Your self-assessment'
                       : 'Ratings across all reviewers'}
                   </p>
                 </div>
-                {(canReviewRatings || isCompleted) && (
+                {(canReviewRatings || (isCompleted && !isDeveloperOrTester)) && (
                   <div className="flex items-center gap-3 text-xs text-slate-500">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
@@ -639,7 +657,7 @@ export default function AppraisalDetailPage() {
                       {/* Self rating */}
                       <div className="flex flex-col items-end gap-0.5">
                         <div className="flex items-center gap-2">
-                          {(canReviewRatings || isCompleted) && (
+                          {(canReviewRatings || (isCompleted && !isDeveloperOrTester)) && (
                             <span className="text-xs text-slate-400 w-16 text-right">Self</span>
                           )}
                           <StarRating
@@ -672,7 +690,7 @@ export default function AppraisalDetailPage() {
                         </div>
                       )}
                       {/* Reviewer's own rating (editable while active, readonly when completed) */}
-                      {(canReviewRatings || (isCompleted && reviewerRatings[cat.key])) && (
+                      {(canReviewRatings || (isCompleted && !isDeveloperOrTester && reviewerRatings[cat.key])) && (
                         <div className="flex flex-col items-end gap-0.5">
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-slate-400 w-16 text-right">{reviewerLabel}</span>
@@ -697,7 +715,7 @@ export default function AppraisalDetailPage() {
           </div>
 
           {/* Manager feedback — editable during manager_review, readonly when completed */}
-          {(canEditManagerFeedback || (isCompleted && appraisal.managerFeedback)) && (
+          {(canEditManagerFeedback || (isCompleted && !isDeveloperOrTester && (appraisal.managerFeedback || appraisal.consolidatedRating))) && (
             <div className="card">
               <div className="card-header">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -719,7 +737,36 @@ export default function AppraisalDetailPage() {
                   )}
                 </div>
               </div>
-              <div className="card-body">
+              <div className="card-body space-y-4">
+                {/* Consolidated Rating */}
+                {canEditManagerFeedback ? (
+                  <div className="pb-4 border-b border-slate-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">Overall Performance Rating</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Your consolidated verdict for this employee</p>
+                      </div>
+                      {managerConsolidatedRating > 0 && (
+                        <span className="text-xs text-slate-500 italic">{RATING_LABELS[managerConsolidatedRating]}</span>
+                      )}
+                    </div>
+                    <StarRating value={managerConsolidatedRating} onChange={setManagerConsolidatedRating} size="lg" color="indigo" />
+                    {!managerConsolidatedRating && (
+                      <p className="text-xs text-rose-500 mt-1">Required before marking as completed</p>
+                    )}
+                  </div>
+                ) : (
+                  appraisal.consolidatedRating && (
+                    <div className="pb-4 border-b border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Overall Performance</p>
+                      <div className="flex items-center gap-3">
+                        <StarRating value={appraisal.consolidatedRating} readonly size="lg" color="indigo" />
+                        <span className="text-sm font-semibold text-indigo-700">{RATING_LABELS[appraisal.consolidatedRating]}</span>
+                      </div>
+                    </div>
+                  )
+                )}
+                {/* Feedback text */}
                 {canEditManagerFeedback ? (
                   <textarea
                     value={managerFeedback}
@@ -729,9 +776,11 @@ export default function AppraisalDetailPage() {
                     className="input resize-none text-sm"
                   />
                 ) : (
-                  <div className="prose-content text-sm text-slate-700 bg-slate-50 rounded-lg p-4 whitespace-pre-wrap leading-relaxed">
-                    {appraisal.managerFeedback || <span className="text-slate-400 italic">No feedback provided</span>}
-                  </div>
+                  appraisal.managerFeedback && (
+                    <div className="prose-content text-sm text-slate-700 bg-slate-50 rounded-lg p-4 whitespace-pre-wrap leading-relaxed">
+                      {appraisal.managerFeedback}
+                    </div>
+                  )
                 )}
               </div>
             </div>
@@ -775,63 +824,69 @@ export default function AppraisalDetailPage() {
             </div>
             <div className="card-body space-y-3">
               <div className="space-y-2">
-                {(['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'] as const).map(
-                  (stage) => (
-                    <div key={stage} className="flex items-center gap-2">
-                      <div
-                        className={clsx(
-                          'w-2 h-2 rounded-full flex-shrink-0',
-                          appraisal.status === stage
-                            ? 'bg-indigo-600'
-                            : ['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'].indexOf(stage) <
-                                ['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'].indexOf(appraisal.status)
-                            ? 'bg-green-500'
-                            : 'bg-slate-300'
+                {(['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'] as const)
+                  .filter((stage) => !(stage === 'tech_lead_review' && skipsTechLeadReview))
+                  .map((stage) => {
+                    const orderedStages = skipsTechLeadReview
+                      ? ['draft', 'submitted', 'manager_review', 'completed']
+                      : ['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'];
+                    const isPast = orderedStages.indexOf(stage) < orderedStages.indexOf(appraisal.status);
+                    const isCurrent = appraisal.status === stage;
+                    return (
+                      <div key={stage} className="flex items-center gap-2">
+                        <div
+                          className={clsx(
+                            'w-2 h-2 rounded-full flex-shrink-0',
+                            isCurrent ? 'bg-indigo-600' : isPast ? 'bg-green-500' : 'bg-slate-300'
+                          )}
+                        />
+                        <span
+                          className={clsx(
+                            'text-xs capitalize',
+                            isCurrent ? 'text-indigo-700 font-semibold' : 'text-slate-500'
+                          )}
+                        >
+                          {stage.replace(/_/g, ' ')}
+                        </span>
+                        {isCurrent && (
+                          <CheckCircleIcon className="w-3.5 h-3.5 text-indigo-600 ml-auto" />
                         )}
-                      />
-                      <span
-                        className={clsx(
-                          'text-xs capitalize',
-                          appraisal.status === stage
-                            ? 'text-indigo-700 font-semibold'
-                            : 'text-slate-500'
-                        )}
-                      >
-                        {stage.replace('_', ' ')}
-                      </span>
-                      {appraisal.status === stage && (
-                        <CheckCircleIcon className="w-3.5 h-3.5 text-indigo-600 ml-auto" />
-                      )}
-                    </div>
-                  )
-                )}
+                      </div>
+                    );
+                  })}
               </div>
 
               {canAdvance && (
-                <button
-                  onClick={() => {
-                    if (canEdit) {
-                      // Save first, then submit
-                      saveMutation
-                        .mutateAsync()
-                        .then(() => submitMutation.mutate())
-                        .catch(() => {});
-                    } else {
-                      submitMutation.mutate();
-                    }
-                  }}
-                  disabled={submitMutation.isLoading || saveMutation.isLoading}
-                  className="btn-primary w-full mt-2"
-                >
-                  {submitMutation.isLoading ? (
-                    <LoadingSpinner size="sm" />
-                  ) : (
-                    <>
-                      <PaperAirplaneIcon className="w-4 h-4" />
-                      {advanceLabel}
-                    </>
+                <>
+                  <button
+                    onClick={() => {
+                      if (canEdit) {
+                        // Save first, then submit
+                        saveMutation
+                          .mutateAsync()
+                          .then(() => submitMutation.mutate())
+                          .catch(() => {});
+                      } else {
+                        submitMutation.mutate();
+                      }
+                    }}
+                    disabled={submitMutation.isLoading || saveMutation.isLoading || consolidatedRatingMissing}
+                    className="btn-primary w-full mt-2"
+                    title={consolidatedRatingMissing ? 'Provide a consolidated rating first' : undefined}
+                  >
+                    {submitMutation.isLoading ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      <>
+                        <PaperAirplaneIcon className="w-4 h-4" />
+                        {advanceLabel}
+                      </>
+                    )}
+                  </button>
+                  {consolidatedRatingMissing && (
+                    <p className="text-xs text-rose-500 text-center mt-1">Set a consolidated rating to complete</p>
                   )}
-                </button>
+                </>
               )}
               {canReturn && (
                 <button

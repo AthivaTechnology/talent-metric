@@ -65,8 +65,8 @@ export const appraisalService = {
     await api.put(`/appraisals/${id}/reviewer-ratings`, { ratings });
   },
 
-  async saveManagerFeedback(id: string, feedback: string): Promise<void> {
-    await api.put(`/appraisals/${id}/manager-feedback`, { feedback });
+  async saveManagerFeedback(id: string, feedback: string, consolidatedRating?: number | null): Promise<void> {
+    await api.put(`/appraisals/${id}/manager-feedback`, { feedback, consolidatedRating });
   },
 
   async bulkCreate(payload: { year: number; deadline?: string }): Promise<{ created: number; skipped: number; message: string }> {

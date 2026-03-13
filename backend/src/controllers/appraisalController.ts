@@ -10,6 +10,13 @@ import {
   WORKFLOW_TRANSITIONS
 } from '../config/constants';
 import { Op } from 'sequelize';
+import {
+  notifyTechLeadOnSubmit,
+  notifyManagerOnTechLeadReview,
+  notifyDeveloperOnComplete,
+  notifyDeveloperOnReturn,
+  notifyOnComment
+} from '../services/emailService';
 
 /**
  * @desc    Get all appraisals (filtered by role)
@@ -448,7 +455,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
 
     // Validate workflow transition
     const currentStatus = appraisal.status;
-    const nextStatus = WORKFLOW_TRANSITIONS[currentStatus];
+    let nextStatus = WORKFLOW_TRANSITIONS[currentStatus];
 
     if (!nextStatus) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -456,6 +463,18 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
         message: 'Appraisal is already completed'
       });
       return;
+    }
+
+    // Fetch the appraisee to check their role for skip logic
+    const appraiseeUser = await User.findByPk(appraisal.userId);
+
+    // Tech leads and managers skip the tech_lead_review stage for their own appraisals
+    const skipTechLeadReview =
+      currentStatus === APPRAISAL_STATUS.SUBMITTED &&
+      appraiseeUser &&
+      (appraiseeUser.role === USER_ROLES.TECH_LEAD || appraiseeUser.role === USER_ROLES.MANAGER);
+    if (skipTechLeadReview) {
+      nextStatus = APPRAISAL_STATUS.MANAGER_REVIEW;
     }
 
     // Check permissions based on current status
@@ -489,9 +508,19 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       }
 
       appraisal.submittedAt = new Date();
+    } else if (skipTechLeadReview) {
+      // Tech lead or manager advancing their own submitted appraisal directly to manager review
+      if (appraisal.userId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({
+          success: false,
+          message: 'Only the appraisee or an admin can advance this appraisal'
+        });
+        return;
+      }
+      appraisal.techLeadReviewedAt = new Date();
     } else if (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
-      // Tech lead reviewing
-      const user = await User.findByPk(appraisal.userId);
+      // Tech lead reviewing a team member's appraisal
+      const user = appraiseeUser;
       if (!user || user.techLeadId !== req.user.id) {
         res.status(HTTP_STATUS.FORBIDDEN).json({
           success: false,
@@ -512,6 +541,14 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
         return;
       }
 
+      if (!appraisal.consolidatedRating) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'A consolidated rating is required before marking this appraisal as completed'
+        });
+        return;
+      }
+
       appraisal.managerReviewedAt = new Date();
       appraisal.completedAt = new Date();
     }
@@ -519,6 +556,46 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
     // Update status
     appraisal.status = nextStatus;
     await appraisal.save();
+
+    // Send email notifications (fire-and-forget)
+    const appraisalUser = (appraisal as any).user as User | null;
+    if (currentStatus === APPRAISAL_STATUS.DRAFT && appraisalUser?.techLeadId) {
+      const techLead = await User.findByPk(appraisalUser.techLeadId, { attributes: ['name', 'email'] });
+      if (techLead) {
+        notifyTechLeadOnSubmit({
+          techLeadEmail: techLead.email,
+          techLeadName: techLead.name,
+          developerName: appraisalUser.name,
+          appraisalId: appraisal.id,
+          year: appraisal.year
+        });
+      }
+    } else if (
+      (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) &&
+      appraisalUser?.managerId
+    ) {
+      const manager = await User.findByPk(appraisalUser.managerId, { attributes: ['name', 'email'] });
+      const reviewer = await User.findByPk(req.user!.id, { attributes: ['name'] });
+      if (manager) {
+        notifyManagerOnTechLeadReview({
+          managerEmail: manager.email,
+          managerName: manager.name,
+          developerName: appraisalUser.name,
+          techLeadName: reviewer?.name ?? 'Tech Lead',
+          appraisalId: appraisal.id,
+          year: appraisal.year
+        });
+      }
+    } else if (currentStatus === APPRAISAL_STATUS.MANAGER_REVIEW && appraisalUser) {
+      const manager = await User.findByPk(req.user!.id, { attributes: ['name'] });
+      notifyDeveloperOnComplete({
+        developerEmail: appraisalUser.email,
+        developerName: appraisalUser.name,
+        managerName: manager?.name ?? 'Manager',
+        appraisalId: appraisal.id,
+        year: appraisal.year
+      });
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -711,6 +788,41 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       ]
     });
 
+    // Notify the relevant party about the new comment
+    const commenter = await User.findByPk(req.user.id, { attributes: ['name'] });
+    if (stage === 'developer_reply') {
+      // Developer replied — notify their tech lead or manager depending on current status
+      const reviewerIds: number[] = [];
+      if (user?.techLeadId) reviewerIds.push(user.techLeadId);
+      if (user?.managerId && appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW) reviewerIds.push(user.managerId);
+      for (const reviewerId of reviewerIds) {
+        const reviewer = await User.findByPk(reviewerId, { attributes: ['name', 'email'] });
+        if (reviewer) {
+          notifyOnComment({
+            recipientEmail: reviewer.email,
+            recipientName: reviewer.name,
+            commenterName: commenter?.name ?? 'Employee',
+            appraisalId: appraisal.id,
+            year: appraisal.year,
+            stage
+          });
+        }
+      }
+    } else {
+      // Reviewer commented — notify the appraisee
+      const appraisee = await User.findByPk(appraisal.userId, { attributes: ['name', 'email'] });
+      if (appraisee) {
+        notifyOnComment({
+          recipientEmail: appraisee.email,
+          recipientName: appraisee.name,
+          commenterName: commenter?.name ?? 'Reviewer',
+          appraisalId: appraisal.id,
+          year: appraisal.year,
+          stage
+        });
+      }
+    }
+
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       message: SUCCESS_MESSAGES.COMMENT_ADDED,
@@ -868,7 +980,7 @@ export const saveManagerFeedback = async (req: AuthRequest, res: Response): Prom
     }
 
     const { id } = req.params;
-    const { feedback } = req.body;
+    const { feedback, consolidatedRating } = req.body;
 
     const appraisal = await Appraisal.findByPk(id, {
       include: [{ model: User, as: 'user' }]
@@ -896,9 +1008,18 @@ export const saveManagerFeedback = async (req: AuthRequest, res: Response): Prom
     }
 
     appraisal.managerFeedback = feedback?.trim() || null;
+
+    if (consolidatedRating !== undefined) {
+      if (consolidatedRating !== null && (consolidatedRating < 1 || consolidatedRating > 5)) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Consolidated rating must be between 1 and 5' });
+        return;
+      }
+      appraisal.consolidatedRating = consolidatedRating ?? null;
+    }
+
     await appraisal.save();
 
-    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Feedback saved', data: { managerFeedback: appraisal.managerFeedback } });
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Feedback saved', data: { managerFeedback: appraisal.managerFeedback, consolidatedRating: appraisal.consolidatedRating } });
   } catch (error) {
     console.error('Save manager feedback error:', error);
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error saving feedback' });
@@ -1048,6 +1169,19 @@ export const returnAppraisal = async (req: AuthRequest, res: Response): Promise<
         userId: req.user.id,
         comment: `[Returned for revision] ${reason.trim()}`,
         stage: 'returned'
+      });
+    }
+
+    // Notify developer
+    if (appraisalUser) {
+      const reviewer = await User.findByPk(req.user.id, { attributes: ['name'] });
+      notifyDeveloperOnReturn({
+        developerEmail: appraisalUser.email,
+        developerName: appraisalUser.name,
+        reviewerName: reviewer?.name ?? 'Reviewer',
+        appraisalId: appraisal.id,
+        year: appraisal.year,
+        reason: reason?.trim()
       });
     }
 
