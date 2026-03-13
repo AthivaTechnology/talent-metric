@@ -470,8 +470,11 @@ export default function AppraisalDetailPage() {
   const deadlineBadge = appraisal.deadline ? getDeadlineBadge(appraisal.deadline, isCompleted) : null;
 
   // Show TL's ratings as a readonly row when the manager is reviewing or the appraisal is completed
+  // Show TL ratings as a readonly reference row only for managers/admins/developers — never for
+  // tech leads themselves, since their own ratings are already shown via reviewerRatings.
   const showTechLeadRow =
     Object.keys(techLeadRatings).length > 0 &&
+    user?.role !== 'tech_lead' &&
     (!isOwnAppraisal
       ? (user?.role === 'manager' && canReviewRatings) || isCompleted
       : isCompleted);

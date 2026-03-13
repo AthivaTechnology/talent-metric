@@ -28,7 +28,7 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear(
 const ROLES_THAT_CAN_CREATE: UserRole[] = ['admin'];
 
 const APPRAISABLE_ROLES: { value: string; label: string }[] = [
-  { value: 'developer', label: 'Developer / Tester' },
+  { value: 'developer', label: 'Developer / Tester / DevOps' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
 ];
@@ -411,8 +411,14 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
     { enabled: selectedRole === 'developer' }
   );
 
+  const { data: devopsData } = useQuery(
+    ['users', { role: 'devops' }],
+    () => userService.getUsers({ role: 'devops', limit: 100 }),
+    { enabled: selectedRole === 'developer' }
+  );
+
   const employeeOptions = selectedRole === 'developer'
-    ? [...(userData?.users ?? []), ...(testerData?.users ?? [])]
+    ? [...(userData?.users ?? []), ...(testerData?.users ?? []), ...(devopsData?.users ?? [])]
     : (userData?.users ?? []);
 
   const mutation = useMutation(
