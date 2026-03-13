@@ -210,6 +210,9 @@ export default function AppraisalDetailPage() {
   // Prevents re-initialization during auto-save background refetches while still
   // re-initializing when the user navigates back (new component instance → null again).
   const mountInitDoneForRef = useRef<string | null>(null);
+  // Always-current refs used by the flush-on-unmount effect.
+  const latestAnswersRef = useRef<Record<string, string>>({});
+  const latestRatingsRef = useRef<Record<string, number>>({});
 
   const appraisalQuery = useQuery(
     ['appraisal', id],
@@ -271,6 +274,29 @@ export default function AppraisalDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appraisal?.id, appraisalQuery.isFetching]);
 
+  // Keep latest-value refs in sync so the flush-on-unmount closure always has fresh data.
+  useEffect(() => { latestAnswersRef.current = answers; }, [answers]);
+  useEffect(() => { latestRatingsRef.current = ratings; }, [ratings]);
+
+  // Flush unsaved answers/ratings to the server immediately when the component unmounts.
+  // This prevents losing changes when the user navigates away before the 2-second debounce fires.
+  useEffect(() => {
+    return () => {
+      if (!canEditRef.current || !isInitializedRef.current || !id) return;
+      appraisalService.updateAppraisal(id, {
+        responses: Object.entries(latestAnswersRef.current).map(([questionId, answer]) => ({
+          questionId,
+          answer,
+        })),
+        ratings: Object.entries(latestRatingsRef.current).map(([category, rating]) => ({
+          category: category as RatingCategory,
+          rating: rating as number,
+        })),
+      }).catch(() => { /* best-effort flush — ignore errors on unmount */ });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   const saveMutation = useMutation(
     () =>
       appraisalService.updateAppraisal(id!, {
@@ -306,6 +332,7 @@ export default function AppraisalDetailPage() {
         })),
       }),
     {
+      onSuccess: () => { queryClient.invalidateQueries(['appraisal', id]); },
       onError: () => { setAnswersAutoSave('idle'); },
     }
   );
