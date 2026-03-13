@@ -206,6 +206,10 @@ export default function AppraisalDetailPage() {
   const canEditFeedbackRef = useRef(false);
   const canEditRef = useRef(false);
   const isInitializedRef = useRef(false);
+  // Tracks which appraisal ID we've initialized state for this mount; null = not yet initialized.
+  // Prevents re-initialization during auto-save background refetches while still
+  // re-initializing when the user navigates back (new component instance → null again).
+  const mountInitDoneForRef = useRef<string | null>(null);
 
   const appraisalQuery = useQuery(
     ['appraisal', id],
@@ -229,9 +233,15 @@ export default function AppraisalDetailPage() {
   const appraisal = appraisalQuery.data;
   const sections: QuestionSection[] = questionsQuery.data ?? [];
 
-  // Initialize state from appraisal data
+  // Initialize state from appraisal data.
+  // We wait until isFetching is false so we always hydrate from the latest server data,
+  // not from the stale React Query cache that was served immediately on remount.
+  // mountInitDoneForRef prevents re-initialization during subsequent background refetches
+  // (e.g. triggered by auto-save invalidation) while the user is actively editing.
   useEffect(() => {
-    if (!appraisal) return;
+    if (!appraisal || appraisalQuery.isFetching) return;
+    if (mountInitDoneForRef.current === String(appraisal.id)) return;
+    mountInitDoneForRef.current = String(appraisal.id);
     isInitializedRef.current = false;
 
     const answerMap: Record<string, string> = {};
@@ -259,7 +269,7 @@ export default function AppraisalDetailPage() {
     // Mark as initialized after a tick so auto-save effects don't fire on load
     setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appraisal?.id, appraisalQuery.dataUpdatedAt]);
+  }, [appraisal?.id, appraisalQuery.isFetching]);
 
   const saveMutation = useMutation(
     () =>
