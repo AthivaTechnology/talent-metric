@@ -206,9 +206,9 @@ export default function AppraisalDetailPage() {
   const canEditFeedbackRef = useRef(false);
   const canEditRef = useRef(false);
   const isInitializedRef = useRef(false);
-  // Tracks which appraisal ID we've initialized state for this mount; null = not yet initialized.
-  // Prevents re-initialization during auto-save background refetches while still
-  // re-initializing when the user navigates back (new component instance → null again).
+  // Tracks which appraisal ID we've initialized for this mount (null = not yet done).
+  // Prevents re-initialization when invalidateQueries triggers a background refetch while
+  // the user is actively editing. Resets to null on every remount (new component instance).
   const mountInitDoneForRef = useRef<string | null>(null);
   // Always-current refs used by the flush-on-unmount effect.
   const latestAnswersRef = useRef<Record<string, string>>({});
@@ -236,13 +236,22 @@ export default function AppraisalDetailPage() {
   const appraisal = appraisalQuery.data;
   const sections: QuestionSection[] = questionsQuery.data ?? [];
 
-  // Initialize state from appraisal data.
-  // We wait until isFetching is false so we always hydrate from the latest server data,
-  // not from the stale React Query cache that was served immediately on remount.
-  // mountInitDoneForRef prevents re-initialization during subsequent background refetches
-  // (e.g. triggered by auto-save invalidation) while the user is actively editing.
+  // Clear the cache on unmount so navigating back always fetches fresh data from the server.
+  // Without this, React Query serves the stale cache immediately on remount (isFetching=false
+  // on the first render) and the init effect below fires before the background fetch starts,
+  // causing the UI to show the pre-edit snapshot even though the server has newer data.
   useEffect(() => {
-    if (!appraisal || appraisalQuery.isFetching) return;
+    return () => {
+      queryClient.removeQueries(['appraisal', id]);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Initialize state from appraisal data.
+  // appraisal?.id goes undefined → X on first load (cache cleared on unmount guarantees
+  // we always get fresh server data before this runs).
+  useEffect(() => {
+    if (!appraisal) return;
     if (mountInitDoneForRef.current === String(appraisal.id)) return;
     mountInitDoneForRef.current = String(appraisal.id);
     isInitializedRef.current = false;
@@ -272,7 +281,7 @@ export default function AppraisalDetailPage() {
     // Mark as initialized after a tick so auto-save effects don't fire on load
     setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appraisal?.id, appraisalQuery.isFetching]);
+  }, [appraisal?.id]);
 
   // Keep latest-value refs in sync so the flush-on-unmount closure always has fresh data.
   useEffect(() => { latestAnswersRef.current = answers; }, [answers]);
