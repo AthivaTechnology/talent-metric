@@ -60,6 +60,17 @@ Comment.belongsTo(Appraisal, {
   as: 'appraisal'
 });
 
+// Question -> Comment (One-to-Many)
+Question.hasMany(Comment, {
+  foreignKey: 'questionId',
+  as: 'questionComments',
+  onDelete: 'CASCADE'
+});
+Comment.belongsTo(Question, {
+  foreignKey: 'questionId',
+  as: 'question'
+});
+
 // Question -> Response (One-to-Many)
 Question.hasMany(Response, {
   foreignKey: 'questionId',

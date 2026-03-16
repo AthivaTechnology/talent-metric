@@ -706,7 +706,7 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const { id } = req.params;
-    const { comment } = req.body;
+    const { comment, questionId } = req.body;
 
     if (!comment || comment.trim().length < 10) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -733,6 +733,44 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Per-question comment path: any authenticated user can comment on a specific question
+    if (questionId) {
+      const parsedQuestionId = parseInt(questionId, 10);
+      if (isNaN(parsedQuestionId) || parsedQuestionId <= 0) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'Invalid questionId'
+        });
+        return;
+      }
+
+      const newComment = await Comment.create({
+        appraisalId: appraisal.id,
+        userId: req.user.id,
+        questionId: parsedQuestionId,
+        comment: comment.trim(),
+        stage: 'question_comment'
+      });
+
+      const commentWithUser = await Comment.findByPk(newComment.id, {
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'name', 'email', 'role']
+          }
+        ]
+      });
+
+      res.status(HTTP_STATUS.CREATED).json({
+        success: true,
+        message: SUCCESS_MESSAGES.COMMENT_ADDED,
+        data: commentWithUser
+      });
+      return;
+    }
+
+    // Appraisal-level comment path: existing role-based logic
     // Determine stage based on user role and appraisal status
     let stage = '';
     const user = (appraisal as any).user;

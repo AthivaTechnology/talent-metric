@@ -118,6 +118,7 @@ export interface Comment {
   id: string;
   appraisalId: string;
   userId: string;
+  questionId?: string | null;
   user?: Pick<User, 'id' | 'name' | 'role'>;
   comment: string;
   createdAt: string;

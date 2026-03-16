@@ -51,8 +51,10 @@ export const appraisalService = {
     return res.data.data;
   },
 
-  async addComment(id: string, comment: string): Promise<Comment> {
-    const res = await api.post(`/appraisals/${id}/comments`, { comment });
+  async addComment(id: string, comment: string, questionId?: string): Promise<Comment> {
+    const payload: Record<string, unknown> = { comment };
+    if (questionId) payload.questionId = questionId;
+    const res = await api.post(`/appraisals/${id}/comments`, payload);
     return res.data.data;
   },
 

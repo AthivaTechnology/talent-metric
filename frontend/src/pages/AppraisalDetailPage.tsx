@@ -140,15 +140,18 @@ function AnswerEditor({ questionId, questionText, initialValue, onChange }: Answ
 }
 
 // Comment item
-function CommentItem({ comment }: { comment: Comment }) {
+function CommentItem({ comment, compact }: { comment: Comment; compact?: boolean }) {
   return (
-    <div className="flex gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 text-sm font-semibold flex items-center justify-center">
+    <div className={clsx('flex gap-2', compact ? 'gap-2' : 'gap-3')}>
+      <div className={clsx(
+        'flex-shrink-0 rounded-full bg-indigo-100 text-indigo-700 font-semibold flex items-center justify-center',
+        compact ? 'w-6 h-6 text-xs' : 'w-8 h-8 text-sm'
+      )}>
         {comment.user?.name?.charAt(0).toUpperCase() ?? '?'}
       </div>
       <div className="flex-1">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-slate-900">{comment.user?.name}</span>
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className={clsx('font-medium text-slate-900', compact ? 'text-xs' : 'text-sm')}>{comment.user?.name}</span>
           <span className="text-xs text-slate-400 capitalize">
             {comment.user?.role?.replace('_', ' ')}
           </span>
@@ -156,8 +159,72 @@ function CommentItem({ comment }: { comment: Comment }) {
             {format(new Date(comment.createdAt), 'MMM d, yyyy HH:mm')}
           </span>
         </div>
-        <p className="text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2">{comment.comment}</p>
+        <p className={clsx('text-slate-700 bg-slate-50 rounded-lg px-3 py-2', compact ? 'text-xs' : 'text-sm')}>{comment.comment}</p>
       </div>
+    </div>
+  );
+}
+
+interface QuestionCommentThreadProps {
+  questionId: string;
+  comments: Comment[];
+  isOpen: boolean;
+  draft: string;
+  isSubmitting: boolean;
+  onToggle: () => void;
+  onDraftChange: (v: string) => void;
+  onSubmit: () => void;
+}
+
+function QuestionCommentThread({
+  questionId: _questionId,
+  comments,
+  isOpen,
+  draft,
+  isSubmitting,
+  onToggle,
+  onDraftChange,
+  onSubmit,
+}: QuestionCommentThreadProps) {
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors"
+      >
+        <ChatBubbleLeftEllipsisIcon className="w-3.5 h-3.5" />
+        {comments.length > 0 ? `${comments.length} comment${comments.length === 1 ? '' : 's'}` : 'Add comment'}
+      </button>
+
+      {isOpen && (
+        <div className="mt-3 space-y-3">
+          {comments.length > 0 && (
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <CommentItem key={c.id} comment={c} compact />
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <textarea
+              value={draft}
+              onChange={(e) => onDraftChange(e.target.value)}
+              placeholder="Add a comment... (min 10 characters)"
+              rows={2}
+              className="input resize-none text-xs flex-1"
+            />
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={draft.trim().length < 10 || isSubmitting}
+              className="btn-primary btn-sm self-end"
+            >
+              Post
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -201,6 +268,9 @@ export default function AppraisalDetailPage() {
   const [techLeadRatings, setTechLeadRatings] = useState<Record<string, number>>({});
   const [reviewerRatings, setReviewerRatings] = useState<Record<string, number>>({});
   const [newComment, setNewComment] = useState('');
+  const [openQuestionComments, setOpenQuestionComments] = useState<Record<string, boolean>>({});
+  const [questionCommentDrafts, setQuestionCommentDrafts] = useState<Record<string, string>>({});
+  const [submittingQuestionId, setSubmittingQuestionId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
@@ -376,6 +446,22 @@ export default function AppraisalDetailPage() {
         queryClient.invalidateQueries(['appraisal-comments', id]);
       },
       onError: (err) => { toast.error(getErrorMessage(err, 'Failed to add comment')); },
+    }
+  );
+
+  const questionCommentMutation = useMutation(
+    ({ qId, text }: { qId: string; text: string }) =>
+      appraisalService.addComment(id!, text, qId),
+    {
+      onSuccess: (_data, { qId }) => {
+        setQuestionCommentDrafts((prev) => ({ ...prev, [qId]: '' }));
+        setSubmittingQuestionId(null);
+        queryClient.invalidateQueries(['appraisal-comments', id]);
+      },
+      onError: (err) => {
+        setSubmittingQuestionId(null);
+        toast.error(getErrorMessage(err, 'Failed to add comment'));
+      },
     }
   );
 
@@ -561,6 +647,14 @@ export default function AppraisalDetailPage() {
     ? 'Move to Manager Review'
     : ADVANCE_LABELS[appraisal.status] ?? 'Advance';
 
+  const questionCommentMap: Record<string, Comment[]> = {};
+  commentsQuery.data?.forEach((c) => {
+    if (c.questionId) {
+      const key = String(c.questionId);
+      questionCommentMap[key] = [...(questionCommentMap[key] ?? []), c];
+    }
+  });
+
   return (
     <div className="space-y-6 animate-fade-in max-w-5xl">
       {/* Back + header */}
@@ -649,6 +743,28 @@ export default function AppraisalDetailPage() {
                         />
                       </div>
                     )}
+                    <QuestionCommentThread
+                      questionId={String(q.id)}
+                      comments={questionCommentMap[String(q.id)] ?? []}
+                      isOpen={!!openQuestionComments[q.id]}
+                      draft={questionCommentDrafts[q.id] ?? ''}
+                      isSubmitting={submittingQuestionId === String(q.id)}
+                      onToggle={() =>
+                        setOpenQuestionComments((prev) => ({ ...prev, [q.id]: !prev[q.id] }))
+                      }
+                      onDraftChange={(v) =>
+                        setQuestionCommentDrafts((prev) => ({ ...prev, [q.id]: v }))
+                      }
+                      onSubmit={() => {
+                        const text = (questionCommentDrafts[String(q.id)] ?? '').trim();
+                        if (text.length < 10) {
+                          toast.error('Comment must be at least 10 characters');
+                          return;
+                        }
+                        setSubmittingQuestionId(String(q.id));
+                        questionCommentMutation.mutate({ qId: String(q.id), text });
+                      }}
+                    />
                   </div>
                 ))}
               </div>
@@ -969,24 +1085,27 @@ export default function AppraisalDetailPage() {
             </div>
           )}
 
-          {/* Comments panel */}
+          {/* Comments panel — appraisal-level only (question comments are inline) */}
           <div className="card">
             <div className="card-header flex items-center gap-2">
               <ChatBubbleLeftEllipsisIcon className="w-4 h-4 text-slate-400" />
               <h3 className="text-sm font-semibold text-slate-900">Comments</h3>
             </div>
             <div className="card-body space-y-4">
-              {commentsQuery.isLoading ? (
-                <LoadingSpinner size="sm" />
-              ) : commentsQuery.data?.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No comments yet.</p>
-              ) : (
-                <div className="space-y-4 max-h-64 overflow-y-auto">
-                  {commentsQuery.data?.map((c) => (
-                    <CommentItem key={c.id} comment={c} />
-                  ))}
-                </div>
-              )}
+              {(() => {
+                const appraisalLevelComments = commentsQuery.data?.filter((c) => !c.questionId) ?? [];
+                return commentsQuery.isLoading ? (
+                  <LoadingSpinner size="sm" />
+                ) : appraisalLevelComments.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4">No comments yet.</p>
+                ) : (
+                  <div className="space-y-4 max-h-64 overflow-y-auto">
+                    {appraisalLevelComments.map((c) => (
+                      <CommentItem key={c.id} comment={c} />
+                    ))}
+                  </div>
+                );
+              })()}
 
               {(!isCompleted && (isOwnAppraisal ? appraisal.status !== 'draft' : true)) && (
                 <div className="space-y-2 pt-2 border-t border-slate-100">

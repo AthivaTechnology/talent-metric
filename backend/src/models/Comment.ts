@@ -5,18 +5,20 @@ interface CommentAttributes {
   id: number;
   appraisalId: number;
   userId: number;
+  questionId?: number | null;
   comment: string;
   stage: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface CommentCreationAttributes extends Optional<CommentAttributes, 'id'> {}
+interface CommentCreationAttributes extends Optional<CommentAttributes, 'id' | 'questionId'> {}
 
 class Comment extends Model<CommentAttributes, CommentCreationAttributes> implements CommentAttributes {
   public id!: number;
   public appraisalId!: number;
   public userId!: number;
+  public questionId!: number | null;
   public comment!: string;
   public stage!: string;
 
@@ -80,12 +82,22 @@ Comment.init(
         }
       }
     },
+    questionId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'questions',
+        key: 'id'
+      },
+      onDelete: 'CASCADE',
+      field: 'question_id'
+    },
     stage: {
       type: DataTypes.STRING(50),
       allowNull: false,
       validate: {
         isIn: {
-          args: [['tech_lead_review', 'manager_review', 'developer_reply', 'returned']],
+          args: [['tech_lead_review', 'manager_review', 'developer_reply', 'returned', 'question_comment']],
           msg: 'Invalid comment stage'
         }
       }
@@ -102,6 +114,9 @@ Comment.init(
       },
       {
         fields: ['user_id']
+      },
+      {
+        fields: ['question_id']
       },
       {
         fields: ['stage']
