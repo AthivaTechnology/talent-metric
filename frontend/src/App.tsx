@@ -14,6 +14,7 @@ import ProfilePage from '@pages/ProfilePage';
 import TeamPage from '@pages/TeamPage';
 import AnalyticsPage from '@pages/AnalyticsPage';
 import UserManualPage from '@pages/UserManualPage';
+import PeerFeedbackPage from '@pages/PeerFeedbackPage';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -63,6 +64,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/peer-feedback" element={<PeerFeedbackPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/user-manual" element={<UserManualPage />} />
       </Route>

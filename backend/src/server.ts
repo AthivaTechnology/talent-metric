@@ -13,6 +13,7 @@ import userRoutes from './routes/userRoutes';
 import appraisalRoutes from './routes/appraisalRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
 import questionRoutes from './routes/questionRoutes';
+import peerFeedbackRoutes from './routes/peerFeedbackRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -78,6 +79,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/appraisals', appraisalRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/questions', questionRoutes);
+app.use('/api/peer-feedback', peerFeedbackRoutes);
 
 // Root endpoint
 app.get('/', (_req: Request, res: Response) => {

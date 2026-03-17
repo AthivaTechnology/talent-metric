@@ -90,6 +90,15 @@ export const appraisalService = {
     return res.data;
   },
 
+  async getPeerOverview(): Promise<Array<{
+    user: { id: string; name: string; email: string; role: string };
+    appraisal: { id: string; status: string; year: number } | null;
+    myFeedback: Pick<PeerFeedback, 'id' | 'appraisalId' | 'didWell' | 'canImprove' | 'createdAt' | 'updatedAt'> | null;
+  }>> {
+    const res = await api.get('/peer-feedback/overview');
+    return res.data.data;
+  },
+
   async getPeerFeedback(id: string): Promise<PeerFeedback[]> {
     const res = await api.get(`/appraisals/${id}/peer-feedback`);
     return res.data.data;
