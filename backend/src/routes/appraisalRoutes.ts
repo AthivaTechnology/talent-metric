@@ -12,7 +12,11 @@ import {
   exportAppraisals,
   addComment,
   getComments,
-  deleteAppraisal
+  deleteAppraisal,
+  getPeerFeedback,
+  addPeerFeedback,
+  updatePeerFeedback,
+  deletePeerFeedback
 } from '../controllers/appraisalController';
 import { authenticate, isAdmin, isTechLeadOrAbove } from '../middleware/auth';
 
@@ -101,6 +105,34 @@ router.post('/:id/return', authenticate, isTechLeadOrAbove, returnAppraisal);
  * @access  Private (Admin)
  */
 router.post('/bulk', authenticate, isAdmin, bulkCreateAppraisals);
+
+/**
+ * @route   GET /api/appraisals/:id/peer-feedback
+ * @desc    Get peer feedbacks for an appraisal
+ * @access  Private
+ */
+router.get('/:id/peer-feedback', authenticate, getPeerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/peer-feedback
+ * @desc    Add peer feedback
+ * @access  Private
+ */
+router.post('/:id/peer-feedback', authenticate, addPeerFeedback);
+
+/**
+ * @route   PUT /api/appraisals/:id/peer-feedback/:feedbackId
+ * @desc    Update own peer feedback
+ * @access  Private
+ */
+router.put('/:id/peer-feedback/:feedbackId', authenticate, updatePeerFeedback);
+
+/**
+ * @route   DELETE /api/appraisals/:id/peer-feedback/:feedbackId
+ * @desc    Delete peer feedback
+ * @access  Private
+ */
+router.delete('/:id/peer-feedback/:feedbackId', authenticate, deletePeerFeedback);
 
 /**
  * @route   DELETE /api/appraisals/:id

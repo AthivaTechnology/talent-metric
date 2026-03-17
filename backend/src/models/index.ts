@@ -4,6 +4,7 @@ import Question from './Question';
 import Response from './Response';
 import Rating from './Rating';
 import Comment from './Comment';
+import PeerFeedback from './PeerFeedback';
 
 // User -> Appraisal (One-to-Many)
 User.hasMany(Appraisal, {
@@ -82,6 +83,28 @@ Response.belongsTo(Question, {
   as: 'question'
 });
 
+// Appraisal -> PeerFeedback (One-to-Many)
+Appraisal.hasMany(PeerFeedback, {
+  foreignKey: 'appraisalId',
+  as: 'peerFeedbacks',
+  onDelete: 'CASCADE'
+});
+PeerFeedback.belongsTo(Appraisal, {
+  foreignKey: 'appraisalId',
+  as: 'appraisal'
+});
+
+// User -> PeerFeedback (giver)
+User.hasMany(PeerFeedback, {
+  foreignKey: 'giverId',
+  as: 'givenFeedbacks',
+  onDelete: 'CASCADE'
+});
+PeerFeedback.belongsTo(User, {
+  foreignKey: 'giverId',
+  as: 'giver'
+});
+
 // User -> User (Tech Lead relationship)
 User.hasMany(User, {
   foreignKey: 'techLeadId',
@@ -110,7 +133,8 @@ export {
   Question,
   Response,
   Rating,
-  Comment
+  Comment,
+  PeerFeedback
 };
 
 export default {
@@ -119,5 +143,6 @@ export default {
   Question,
   Response,
   Rating,
-  Comment
+  Comment,
+  PeerFeedback
 };

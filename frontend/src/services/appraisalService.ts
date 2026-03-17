@@ -2,6 +2,7 @@ import api from './api';
 import type {
   Appraisal,
   Comment,
+  PeerFeedback,
   RatingCategory,
   CreateAppraisalPayload,
   UpdateAppraisalPayload,
@@ -87,5 +88,24 @@ export const appraisalService = {
       responseType: 'blob',
     });
     return res.data;
+  },
+
+  async getPeerFeedback(id: string): Promise<PeerFeedback[]> {
+    const res = await api.get(`/appraisals/${id}/peer-feedback`);
+    return res.data.data;
+  },
+
+  async addPeerFeedback(id: string, didWell: string, canImprove: string): Promise<PeerFeedback> {
+    const res = await api.post(`/appraisals/${id}/peer-feedback`, { didWell, canImprove });
+    return res.data.data;
+  },
+
+  async updatePeerFeedback(id: string, feedbackId: string, didWell: string, canImprove: string): Promise<PeerFeedback> {
+    const res = await api.put(`/appraisals/${id}/peer-feedback/${feedbackId}`, { didWell, canImprove });
+    return res.data.data;
+  },
+
+  async deletePeerFeedback(id: string, feedbackId: string): Promise<void> {
+    await api.delete(`/appraisals/${id}/peer-feedback/${feedbackId}`);
   },
 };

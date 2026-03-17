@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question } from '../models';
+import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question, PeerFeedback } from '../models';
 import {
   HTTP_STATUS,
   ERROR_MESSAGES,
@@ -1318,6 +1318,173 @@ export const exportAppraisals = async (req: AuthRequest, res: Response): Promise
   }
 };
 
+/**
+ * @desc    Get peer feedbacks for an appraisal
+ * @route   GET /api/appraisals/:id/peer-feedback
+ * @access  Private
+ */
+export const getPeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id);
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const feedbacks = await PeerFeedback.findAll({
+      where: { appraisalId: appraisal.id },
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }],
+      order: [['createdAt', 'ASC']]
+    });
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: feedbacks });
+  } catch (error) {
+    console.error('Get peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error fetching peer feedback' });
+  }
+};
+
+/**
+ * @desc    Add peer feedback for an appraisal
+ * @route   POST /api/appraisals/:id/peer-feedback
+ * @access  Private (any user except the appraisee)
+ */
+export const addPeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id);
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    if (appraisal.userId === req.user.id) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You cannot give peer feedback on your own appraisal' });
+      return;
+    }
+
+    const { didWell, canImprove } = req.body;
+
+    if (!didWell || didWell.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they did well" must be at least 5 characters' });
+      return;
+    }
+    if (!canImprove || canImprove.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they can improve" must be at least 5 characters' });
+      return;
+    }
+
+    const existing = await PeerFeedback.findOne({ where: { appraisalId: appraisal.id, giverId: req.user.id } });
+    if (existing) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'You have already submitted peer feedback for this appraisal' });
+      return;
+    }
+
+    const feedback = await PeerFeedback.create({
+      appraisalId: appraisal.id,
+      giverId: req.user.id,
+      didWell: didWell.trim(),
+      canImprove: canImprove.trim()
+    });
+
+    const feedbackWithGiver = await PeerFeedback.findByPk(feedback.id, {
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }]
+    });
+
+    res.status(HTTP_STATUS.CREATED).json({ success: true, message: 'Peer feedback submitted', data: feedbackWithGiver });
+  } catch (error) {
+    console.error('Add peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error submitting peer feedback' });
+  }
+};
+
+/**
+ * @desc    Update own peer feedback
+ * @route   PUT /api/appraisals/:id/peer-feedback/:feedbackId
+ * @access  Private (giver only)
+ */
+export const updatePeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const feedback = await PeerFeedback.findByPk(req.params.feedbackId);
+    if (!feedback) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: 'Peer feedback not found' });
+      return;
+    }
+
+    if (feedback.giverId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only edit your own feedback' });
+      return;
+    }
+
+    const { didWell, canImprove } = req.body;
+
+    if (!didWell || didWell.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they did well" must be at least 5 characters' });
+      return;
+    }
+    if (!canImprove || canImprove.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they can improve" must be at least 5 characters' });
+      return;
+    }
+
+    await feedback.update({ didWell: didWell.trim(), canImprove: canImprove.trim() });
+
+    const updated = await PeerFeedback.findByPk(feedback.id, {
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }]
+    });
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Peer feedback updated', data: updated });
+  } catch (error) {
+    console.error('Update peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error updating peer feedback' });
+  }
+};
+
+/**
+ * @desc    Delete peer feedback
+ * @route   DELETE /api/appraisals/:id/peer-feedback/:feedbackId
+ * @access  Private (giver or admin)
+ */
+export const deletePeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const feedback = await PeerFeedback.findByPk(req.params.feedbackId);
+    if (!feedback) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: 'Peer feedback not found' });
+      return;
+    }
+
+    if (feedback.giverId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only delete your own feedback' });
+      return;
+    }
+
+    await feedback.destroy();
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Peer feedback deleted' });
+  } catch (error) {
+    console.error('Delete peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error deleting peer feedback' });
+  }
+};
+
 export default {
   getAllAppraisals,
   getAppraisalById,
@@ -1331,5 +1498,9 @@ export default {
   exportAppraisals,
   addComment,
   getComments,
-  deleteAppraisal
+  deleteAppraisal,
+  getPeerFeedback,
+  addPeerFeedback,
+  updatePeerFeedback,
+  deletePeerFeedback
 };

@@ -12,6 +12,9 @@ import {
   CheckCircleIcon,
   PaperAirplaneIcon,
   ArrowUturnLeftIcon,
+  UserGroupIcon,
+  PencilIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
@@ -22,7 +25,7 @@ import StarRating from '@components/common/StarRating';
 import LoadingSpinner from '@components/common/LoadingSpinner';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import type { RatingCategory, QuestionSection, Comment } from '@/types/index';
+import type { RatingCategory, QuestionSection, Comment, PeerFeedback } from '@/types/index';
 import { getRatingConfig } from '@/types/index';
 import clsx from 'clsx';
 
@@ -271,6 +274,9 @@ export default function AppraisalDetailPage() {
   const [openQuestionComments, setOpenQuestionComments] = useState<Record<string, boolean>>({});
   const [questionCommentDrafts, setQuestionCommentDrafts] = useState<Record<string, string>>({});
   const [submittingQuestionId, setSubmittingQuestionId] = useState<string | null>(null);
+  const [peerDidWell, setPeerDidWell] = useState('');
+  const [peerCanImprove, setPeerCanImprove] = useState('');
+  const [editingFeedback, setEditingFeedback] = useState<PeerFeedback | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
   const [activeSection, setActiveSection] = useState(0);
@@ -310,6 +316,50 @@ export default function AppraisalDetailPage() {
     ['appraisal-comments', id],
     () => appraisalService.getComments(id!),
     { enabled: !!id }
+  );
+
+  const peerFeedbackQuery = useQuery(
+    ['peer-feedback', id],
+    () => appraisalService.getPeerFeedback(id!),
+    { enabled: !!id }
+  );
+
+  const addPeerFeedbackMutation = useMutation(
+    ({ didWell, canImprove }: { didWell: string; canImprove: string }) =>
+      appraisalService.addPeerFeedback(id!, didWell, canImprove),
+    {
+      onSuccess: () => {
+        toast.success('Peer feedback submitted');
+        setPeerDidWell('');
+        setPeerCanImprove('');
+        queryClient.invalidateQueries(['peer-feedback', id]);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to submit feedback')); },
+    }
+  );
+
+  const updatePeerFeedbackMutation = useMutation(
+    ({ feedbackId, didWell, canImprove }: { feedbackId: string; didWell: string; canImprove: string }) =>
+      appraisalService.updatePeerFeedback(id!, feedbackId, didWell, canImprove),
+    {
+      onSuccess: () => {
+        toast.success('Feedback updated');
+        setEditingFeedback(null);
+        queryClient.invalidateQueries(['peer-feedback', id]);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to update feedback')); },
+    }
+  );
+
+  const deletePeerFeedbackMutation = useMutation(
+    (feedbackId: string) => appraisalService.deletePeerFeedback(id!, feedbackId),
+    {
+      onSuccess: () => {
+        toast.success('Feedback deleted');
+        queryClient.invalidateQueries(['peer-feedback', id]);
+      },
+      onError: (err) => { toast.error(getErrorMessage(err, 'Failed to delete feedback')); },
+    }
   );
 
   const appraisal = appraisalQuery.data;
@@ -1084,6 +1134,156 @@ export default function AppraisalDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Peer Feedback panel */}
+          {(() => {
+            const feedbacks = peerFeedbackQuery.data ?? [];
+            const myFeedback = feedbacks.find((f) => String(f.giverId) === String(user?.id));
+            const canGive = !isOwnAppraisal;
+
+            return (
+              <div className="card">
+                <div className="card-header flex items-center gap-2">
+                  <UserGroupIcon className="w-4 h-4 text-slate-400" />
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Peer Feedback
+                    {feedbacks.length > 0 && (
+                      <span className="ml-2 text-xs font-normal text-slate-400">({feedbacks.length})</span>
+                    )}
+                  </h3>
+                </div>
+                <div className="card-body space-y-4">
+                  {/* Existing feedbacks */}
+                  {peerFeedbackQuery.isLoading ? (
+                    <LoadingSpinner size="sm" />
+                  ) : feedbacks.length === 0 && !canGive ? (
+                    <p className="text-xs text-slate-400 text-center py-2">No peer feedback yet.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {feedbacks.map((fb) => {
+                        const isOwn = String(fb.giverId) === String(user?.id);
+                        const isEditing = editingFeedback?.id === fb.id;
+                        return (
+                          <div key={fb.id} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold flex items-center justify-center flex-shrink-0">
+                                  {fb.giver?.name?.charAt(0).toUpperCase() ?? '?'}
+                                </div>
+                                <span className="text-xs font-medium text-slate-800">{fb.giver?.name}</span>
+                                <span className="text-xs text-slate-400 capitalize">{fb.giver?.role?.replace('_', ' ')}</span>
+                              </div>
+                              {isOwn && !isEditing && (
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => {
+                                      setEditingFeedback(fb);
+                                      setPeerDidWell(fb.didWell);
+                                      setPeerCanImprove(fb.canImprove);
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
+                                  >
+                                    <PencilIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => deletePeerFeedbackMutation.mutate(fb.id)}
+                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <TrashIcon className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            {isEditing ? (
+                              <div className="space-y-2 pl-8">
+                                <div>
+                                  <label className="text-xs font-medium text-emerald-700 block mb-1">What they did well</label>
+                                  <textarea
+                                    value={peerDidWell}
+                                    onChange={(e) => setPeerDidWell(e.target.value)}
+                                    rows={2}
+                                    className="input resize-none text-xs w-full"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs font-medium text-amber-700 block mb-1">What they can improve</label>
+                                  <textarea
+                                    value={peerCanImprove}
+                                    onChange={(e) => setPeerCanImprove(e.target.value)}
+                                    rows={2}
+                                    className="input resize-none text-xs w-full"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => updatePeerFeedbackMutation.mutate({ feedbackId: fb.id, didWell: peerDidWell, canImprove: peerCanImprove })}
+                                    disabled={peerDidWell.trim().length < 5 || peerCanImprove.trim().length < 5 || updatePeerFeedbackMutation.isLoading}
+                                    className="btn-primary btn-sm flex-1"
+                                  >
+                                    {updatePeerFeedbackMutation.isLoading ? <LoadingSpinner size="sm" /> : 'Save'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setEditingFeedback(null); setPeerDidWell(''); setPeerCanImprove(''); }}
+                                    className="btn-secondary btn-sm flex-1"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="pl-8 space-y-2">
+                                <div>
+                                  <p className="text-xs font-medium text-emerald-700 mb-0.5">What they did well</p>
+                                  <p className="text-xs text-slate-700 bg-emerald-50 rounded-lg px-3 py-2">{fb.didWell}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium text-amber-700 mb-0.5">What they can improve</p>
+                                  <p className="text-xs text-slate-700 bg-amber-50 rounded-lg px-3 py-2">{fb.canImprove}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Add feedback form — only if user hasn't given feedback yet and is not the appraisee */}
+                  {canGive && !myFeedback && !editingFeedback && (
+                    <div className="space-y-3 pt-2 border-t border-slate-100">
+                      <div>
+                        <label className="text-xs font-medium text-emerald-700 block mb-1">What did they do well?</label>
+                        <textarea
+                          value={peerDidWell}
+                          onChange={(e) => setPeerDidWell(e.target.value)}
+                          placeholder="Share something they excelled at..."
+                          rows={2}
+                          className="input resize-none text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-amber-700 block mb-1">What can they improve?</label>
+                        <textarea
+                          value={peerCanImprove}
+                          onChange={(e) => setPeerCanImprove(e.target.value)}
+                          placeholder="Suggest an area for growth..."
+                          rows={2}
+                          className="input resize-none text-xs"
+                        />
+                      </div>
+                      <button
+                        onClick={() => addPeerFeedbackMutation.mutate({ didWell: peerDidWell, canImprove: peerCanImprove })}
+                        disabled={peerDidWell.trim().length < 5 || peerCanImprove.trim().length < 5 || addPeerFeedbackMutation.isLoading}
+                        className="btn-primary btn-sm w-full"
+                      >
+                        {addPeerFeedbackMutation.isLoading ? <LoadingSpinner size="sm" /> : 'Submit Feedback'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Comments panel — appraisal-level only (question comments are inline) */}
           <div className="card">

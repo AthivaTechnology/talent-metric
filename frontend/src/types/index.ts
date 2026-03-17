@@ -124,6 +124,17 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface PeerFeedback {
+  id: string;
+  appraisalId: string;
+  giverId: string;
+  giver?: Pick<User, 'id' | 'name' | 'role'>;
+  didWell: string;
+  canImprove: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Appraisal {
   id: string;
   userId: string;
