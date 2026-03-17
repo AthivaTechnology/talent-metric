@@ -129,7 +129,31 @@ export async function notifyDeveloperOnReturn(opts: {
   );
 }
 
-// 5. Comment added — notify the appraisee (if comment is from reviewer) or the reviewer (if reply from appraisee)
+// 5. Appraisal opened — notify the appraisee
+export async function notifyAppraiseeOnOpen(opts: {
+  appraiseeEmail: string;
+  appraiseeName: string;
+  appraisalId: number;
+  year: number;
+  deadline?: Date | null;
+}) {
+  const deadlineNote = opts.deadline
+    ? `<p>Please complete it by <strong>${opts.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.</p>`
+    : '';
+  await send(
+    opts.appraiseeEmail,
+    `Your ${opts.year} appraisal is now open`,
+    baseLayout(`
+      <h3 style="margin-top:0">Your ${opts.year} Appraisal is Ready</h3>
+      <p>Hi <strong>${opts.appraiseeName}</strong>,</p>
+      <p>Your ${opts.year} self-assessment appraisal has been opened and is ready for you to fill in.</p>
+      ${deadlineNote}
+      ${btn(appraisalLink(opts.appraisalId), 'Start Appraisal')}
+    `)
+  );
+}
+
+// 6. Comment added — notify the appraisee (if comment is from reviewer) or the reviewer (if reply from appraisee)
 export async function notifyOnComment(opts: {
   recipientEmail: string;
   recipientName: string;

@@ -16,7 +16,8 @@ import {
   notifyManagerOnTechLeadReview,
   notifyDeveloperOnComplete,
   notifyDeveloperOnReturn,
-  notifyOnComment
+  notifyOnComment,
+  notifyAppraiseeOnOpen
 } from '../services/emailService';
 
 /**
@@ -279,6 +280,14 @@ export const createAppraisal = async (req: AuthRequest, res: Response): Promise<
       answer: ''
     }));
     await ResponseModel.bulkCreate(responses);
+
+    notifyAppraiseeOnOpen({
+      appraiseeEmail: user.email,
+      appraiseeName: user.name,
+      appraisalId: appraisal.id,
+      year: appraisal.year,
+      deadline: appraisal.deadline
+    });
 
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -1120,6 +1129,15 @@ export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Pro
       if (questions.length > 0) {
         await ResponseModel.bulkCreate(questions.map(q => ({ appraisalId: appraisal.id, questionId: q.id, answer: '' })));
       }
+
+      notifyAppraiseeOnOpen({
+        appraiseeEmail: user.email,
+        appraiseeName: user.name,
+        appraisalId: appraisal.id,
+        year: appraisal.year,
+        deadline: appraisal.deadline
+      });
+
       created++;
     }
 
