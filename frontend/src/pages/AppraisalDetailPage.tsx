@@ -1135,8 +1135,8 @@ export default function AppraisalDetailPage() {
             </div>
           )}
 
-          {/* Peer Feedback panel */}
-          {(() => {
+          {/* Peer Feedback panel — managers and admins only */}
+          {(user?.role === 'manager' || user?.role === 'admin') && (() => {
             const feedbacks = peerFeedbackQuery.data ?? [];
             const myFeedback = feedbacks.find((f) => String(f.giverId) === String(user?.id));
             const canGive = !isOwnAppraisal;

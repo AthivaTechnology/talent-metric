@@ -1321,12 +1321,17 @@ export const exportAppraisals = async (req: AuthRequest, res: Response): Promise
 /**
  * @desc    Get peer feedbacks for an appraisal
  * @route   GET /api/appraisals/:id/peer-feedback
- * @access  Private
+ * @access  Private (Manager, Admin)
  */
 export const getPeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role !== USER_ROLES.MANAGER && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only managers can view peer feedback' });
       return;
     }
 
