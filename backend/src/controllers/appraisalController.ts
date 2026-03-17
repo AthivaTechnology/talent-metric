@@ -1603,8 +1603,9 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
 
     res.status(HTTP_STATUS.OK).json({ success: true, data: summary });
   } catch (error) {
-    console.error('Generate summary error:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error generating summary' });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Generate summary error:', msg);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: `Error generating summary: ${msg}` });
   }
 };
 
