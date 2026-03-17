@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question, PeerFeedback } from '../models';
@@ -1490,6 +1491,99 @@ export const deletePeerFeedback = async (req: AuthRequest, res: Response): Promi
   }
 };
 
+/**
+ * @desc    Generate AI summary of self-assessment answers
+ * @route   POST /api/appraisals/:id/summary
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const generateSummary = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    // Only reviewers can generate
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only reviewers can generate summaries' });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'role']
+        },
+        {
+          model: ResponseModel,
+          as: 'responses',
+          include: [{ model: Question, as: 'question', attributes: ['id', 'questionText', 'section', 'sectionTitle'] }]
+        }
+      ]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    // Return cached unless force=true
+    const force = req.query.force === 'true';
+    if (appraisal.aiSummary && !force) {
+      res.status(HTTP_STATUS.OK).json({ success: true, data: appraisal.aiSummary });
+      return;
+    }
+
+    const responses = (appraisal as any).responses ?? [];
+    if (responses.length === 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No answers to summarise' });
+      return;
+    }
+
+    // Group responses by section
+    const sections: Record<string, { title: string; qas: Array<{ q: string; a: string }> }> = {};
+    for (const r of responses) {
+      const q = r.question;
+      if (!q) continue;
+      const key = q.section ?? 'general';
+      if (!sections[key]) sections[key] = { title: q.sectionTitle ?? key, qas: [] };
+      const plainAnswer = (r.answer ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (plainAnswer) sections[key].qas.push({ q: q.questionText, a: plainAnswer });
+    }
+
+    const assessmentText = Object.values(sections)
+      .filter((s) => s.qas.length > 0)
+      .map((s) => {
+        const lines = s.qas.map((qa) => `Q: ${qa.q}\nA: ${qa.a}`).join('\n\n');
+        return `Section: ${s.title}\n${lines}`;
+      })
+      .join('\n\n---\n\n');
+
+    const appraiseeUser = (appraisal as any).user;
+    const prompt = `You are reviewing a self-assessment for ${appraiseeUser?.name ?? 'an employee'} (${appraiseeUser?.role ?? 'unknown role'}), ${appraisal.year} appraisal.\nSummarise their answers in 4 short paragraphs:\n1. Key achievements & impact\n2. Technical/professional strengths\n3. Areas for growth\n4. Overall impression\nKeep it factual, concise, and under 250 words.\n\n--- Self-Assessment ---\n${assessmentText}`;
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const summaryBlock = message.content.find((b) => b.type === 'text');
+    const summary = summaryBlock?.type === 'text' ? summaryBlock.text.trim() : '';
+
+    appraisal.aiSummary = summary;
+    await appraisal.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: summary });
+  } catch (error) {
+    console.error('Generate summary error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error generating summary' });
+  }
+};
+
 export default {
   getAllAppraisals,
   getAppraisalById,
@@ -1507,5 +1601,6 @@ export default {
   getPeerFeedback,
   addPeerFeedback,
   updatePeerFeedback,
-  deletePeerFeedback
+  deletePeerFeedback,
+  generateSummary
 };

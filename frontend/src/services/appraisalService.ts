@@ -117,4 +117,9 @@ export const appraisalService = {
   async deletePeerFeedback(id: string, feedbackId: string): Promise<void> {
     await api.delete(`/appraisals/${id}/peer-feedback/${feedbackId}`);
   },
+
+  async generateSummary(id: string, force = false): Promise<string> {
+    const res = await api.post(`/appraisals/${id}/summary`, null, { params: force ? { force: 'true' } : {} });
+    return res.data.data;
+  },
 };

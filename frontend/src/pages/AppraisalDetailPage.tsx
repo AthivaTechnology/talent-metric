@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   PaperAirplaneIcon,
   ArrowUturnLeftIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
@@ -281,6 +282,8 @@ export default function AppraisalDetailPage() {
   const [feedbackAutoSave, setFeedbackAutoSave] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [returnReason, setReturnReason] = useState('');
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const canReviewRatingsRef = useRef(false);
   const canEditFeedbackRef = useRef(false);
   const canEditRef = useRef(false);
@@ -693,6 +696,66 @@ export default function AppraisalDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left: questionnaire / readonly view */}
         <div className="lg:col-span-3 space-y-6">
+
+          {/* AI Summary card — reviewers only, non-draft appraisals */}
+          {!isOwnAppraisal && !isDraft && (
+            <div className="card card-body space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <SparklesIcon className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm font-semibold text-slate-800">AI Summary</span>
+                  <span className="text-xs text-slate-400">Self-assessment highlights</span>
+                </div>
+                {aiSummary ? (
+                  <button
+                    onClick={async () => {
+                      setSummaryLoading(true);
+                      try {
+                        const s = await appraisalService.generateSummary(id!, true);
+                        setAiSummary(s);
+                      } catch {
+                        toast.error('Failed to regenerate summary');
+                      } finally {
+                        setSummaryLoading(false);
+                      }
+                    }}
+                    disabled={summaryLoading}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {summaryLoading ? <LoadingSpinner size="sm" /> : <SparklesIcon className="w-3 h-3" />}
+                    Regenerate
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setSummaryLoading(true);
+                      try {
+                        const s = await appraisalService.generateSummary(id!);
+                        setAiSummary(s);
+                      } catch {
+                        toast.error('Failed to generate summary');
+                      } finally {
+                        setSummaryLoading(false);
+                      }
+                    }}
+                    disabled={summaryLoading}
+                    className="btn-primary btn-sm flex items-center gap-1.5"
+                  >
+                    {summaryLoading ? <LoadingSpinner size="sm" /> : <SparklesIcon className="w-3.5 h-3.5" />}
+                    {summaryLoading ? 'Analysing…' : 'Generate Summary'}
+                  </button>
+                )}
+              </div>
+              {aiSummary && (
+                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{aiSummary}</p>
+              )}
+              {!aiSummary && !summaryLoading && (
+                <p className="text-xs text-slate-400 italic">
+                  Click "Generate Summary" to get a concise AI-generated overview of the self-assessment.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Section tabs */}
           {sections.length > 0 && (

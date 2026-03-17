@@ -14,12 +14,13 @@ interface AppraisalAttributes {
   completedAt?: Date | null;
   managerFeedback?: string | null;
   consolidatedRating?: number | null;
+  aiSummary?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 interface AppraisalCreationAttributes
-  extends Optional<AppraisalAttributes, 'id' | 'deadline' | 'submittedAt' | 'techLeadReviewedAt' | 'managerReviewedAt' | 'completedAt' | 'managerFeedback' | 'consolidatedRating'> {}
+  extends Optional<AppraisalAttributes, 'id' | 'deadline' | 'submittedAt' | 'techLeadReviewedAt' | 'managerReviewedAt' | 'completedAt' | 'managerFeedback' | 'consolidatedRating' | 'aiSummary'> {}
 
 class Appraisal extends Model<AppraisalAttributes, AppraisalCreationAttributes> implements AppraisalAttributes {
   public id!: number;
@@ -33,6 +34,7 @@ class Appraisal extends Model<AppraisalAttributes, AppraisalCreationAttributes> 
   public completedAt!: Date | null;
   public managerFeedback!: string | null;
   public consolidatedRating!: number | null;
+  public aiSummary!: string | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -134,6 +136,11 @@ Appraisal.init(
         min: { args: [1], msg: 'Consolidated rating must be at least 1' },
         max: { args: [5], msg: 'Consolidated rating must be at most 5' }
       }
+    },
+    aiSummary: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'ai_summary'
     }
   },
   {

@@ -16,7 +16,8 @@ import {
   getPeerFeedback,
   addPeerFeedback,
   updatePeerFeedback,
-  deletePeerFeedback
+  deletePeerFeedback,
+  generateSummary
 } from '../controllers/appraisalController';
 import { authenticate, isAdmin, isTechLeadOrAbove } from '../middleware/auth';
 
@@ -133,6 +134,13 @@ router.put('/:id/peer-feedback/:feedbackId', authenticate, updatePeerFeedback);
  * @access  Private
  */
 router.delete('/:id/peer-feedback/:feedbackId', authenticate, deletePeerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/summary
+ * @desc    Generate AI summary of self-assessment
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.post('/:id/summary', authenticate, generateSummary);
 
 /**
  * @route   DELETE /api/appraisals/:id
