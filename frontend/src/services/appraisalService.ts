@@ -119,7 +119,7 @@ export const appraisalService = {
   },
 
   async generateSummary(id: string, force = false): Promise<string> {
-    const res = await api.post(`/appraisals/${id}/summary`, null, { params: force ? { force: 'true' } : {} });
+    const res = await api.post(`/appraisals/${id}/summary`, {}, { params: force ? { force: 'true' } : {} });
     return res.data.data;
   },
 };

@@ -1527,6 +1527,11 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    if (!process.env.ANTHROPIC_API_KEY) {
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'AI summary is not configured on this server. Set ANTHROPIC_API_KEY in the environment.' });
+      return;
+    }
+
     const appraisal = await Appraisal.findByPk(req.params.id, {
       include: [
         {
@@ -1555,14 +1560,15 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
     }
 
     const responses = (appraisal as any).responses ?? [];
-    if (responses.length === 0) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No answers to summarise' });
+    const answeredResponses = responses.filter((r: any) => r.answer && r.answer.replace(/<[^>]+>/g, '').trim().length > 0);
+    if (answeredResponses.length === 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No answers found. The appraisee has not filled in any answers yet.' });
       return;
     }
 
     // Group responses by section
     const sections: Record<string, { title: string; qas: Array<{ q: string; a: string }> }> = {};
-    for (const r of responses) {
+    for (const r of answeredResponses) {
       const q = r.question;
       if (!q) continue;
       const key = q.section ?? 'general';
