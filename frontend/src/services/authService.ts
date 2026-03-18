@@ -19,4 +19,14 @@ export const authService = {
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await api.put('/auth/change-password', { currentPassword, newPassword });
   },
+
+  async verifyInvite(token: string): Promise<{ name: string; email: string }> {
+    const res = await api.get(`/auth/verify-invite/${token}`);
+    return res.data.data;
+  },
+
+  async acceptInvite(token: string, password: string): Promise<LoginResponse> {
+    const res = await api.post<ApiResponse<LoginResponse>>('/auth/accept-invite', { token, password });
+    return res.data.data;
+  },
 };

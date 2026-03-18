@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import User from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { HTTP_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../config/constants';
+import { Op } from 'sequelize';
 
 /**
  * @desc    Login user
@@ -32,6 +33,15 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
       res.status(HTTP_STATUS.UNAUTHORIZED).json({
         success: false,
         message: ERROR_MESSAGES.INVALID_CREDENTIALS
+      });
+      return;
+    }
+
+    // Check if user has no password set (invite not accepted yet)
+    if (!user.password) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({
+        success: false,
+        message: 'No password set. Please use your invite link from the appraisal email.'
       });
       return;
     }
@@ -227,9 +237,123 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+/**
+ * @desc    Verify an invitation token (returns user name/email for the set-password page)
+ * @route   GET /api/auth/verify-invite/:token
+ * @access  Public
+ */
+export const verifyInvite = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token } = req.params;
+
+    const user = await User.findOne({
+      where: {
+        invitationToken: token,
+        invitationTokenExpiry: { [Op.gt]: new Date() }
+      }
+    });
+
+    if (!user) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Invite link is invalid or has expired. Please contact your admin.'
+      });
+      return;
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      data: { name: user.name, email: user.email }
+    });
+  } catch (error) {
+    console.error('Verify invite error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Error verifying invite'
+    });
+  }
+};
+
+/**
+ * @desc    Accept invite — set password and auto-login
+ * @route   POST /api/auth/accept-invite
+ * @access  Public
+ */
+export const acceptInvite = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Token and password are required'
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Password must be at least 6 characters'
+      });
+      return;
+    }
+
+    const user = await User.findOne({
+      where: {
+        invitationToken: token,
+        invitationTokenExpiry: { [Op.gt]: new Date() }
+      }
+    });
+
+    if (!user) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Invite link is invalid or has expired. Please contact your admin.'
+      });
+      return;
+    }
+
+    user.password = password;
+    user.invitationToken = null;
+    user.invitationTokenExpiry = null;
+    await user.save();
+
+    const jwtToken = generateToken({
+      id: user.id,
+      email: user.email,
+      role: user.role
+    });
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Password set successfully',
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          techLeadId: user.techLeadId,
+          managerId: user.managerId
+        },
+        token: jwtToken
+      }
+    });
+  } catch (error) {
+    console.error('Accept invite error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Error accepting invite'
+    });
+  }
+};
+
 export default {
   login,
   getMe,
   logout,
-  changePassword
+  changePassword,
+  verifyInvite,
+  acceptInvite
 };

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import crypto from 'crypto';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question, PeerFeedback } from '../models';
@@ -281,12 +282,23 @@ export const createAppraisal = async (req: AuthRequest, res: Response): Promise<
     }));
     await ResponseModel.bulkCreate(responses);
 
+    // If user has no password yet, generate an invitation token so they can set one via email
+    let invitationToken: string | undefined;
+    if (!user.password) {
+      invitationToken = crypto.randomBytes(32).toString('hex');
+      await user.update({
+        invitationToken,
+        invitationTokenExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      });
+    }
+
     notifyAppraiseeOnOpen({
       appraiseeEmail: user.email,
       appraiseeName: user.name,
       appraisalId: appraisal.id,
       year: appraisal.year,
-      deadline: appraisal.deadline
+      deadline: appraisal.deadline,
+      invitationToken
     });
 
     res.status(HTTP_STATUS.CREATED).json({

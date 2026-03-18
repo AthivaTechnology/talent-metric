@@ -223,7 +223,6 @@ export interface LoginResponse {
 export interface CreateUserPayload {
   name: string;
   email: string;
-  password: string;
   role: UserRole;
   techLeadId?: number | string;
   managerId?: number | string;

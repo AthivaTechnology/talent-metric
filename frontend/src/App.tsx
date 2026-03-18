@@ -6,6 +6,7 @@ import LoadingSpinner from '@components/common/LoadingSpinner';
 
 // Pages
 import LoginPage from '@pages/LoginPage';
+import AcceptInvitePage from '@pages/AcceptInvitePage';
 import DashboardPage from '@pages/DashboardPage';
 import AppraisalsPage from '@pages/AppraisalsPage';
 import AppraisalDetailPage from '@pages/AppraisalDetailPage';
@@ -27,6 +28,7 @@ export default function App() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
       {/* Protected — layout wrapper */}
       <Route

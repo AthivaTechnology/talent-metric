@@ -132,10 +132,10 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
  */
 export const createUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, email, password, role, techLeadId, managerId } = req.body;
+    const { name, email, role, techLeadId, managerId } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !role) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: ERROR_MESSAGES.MISSING_REQUIRED_FIELDS
@@ -149,15 +149,6 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: 'Invalid email format'
-      });
-      return;
-    }
-
-    // Validate password length
-    if (password.length < 6) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'Password must be at least 6 characters'
       });
       return;
     }
@@ -205,11 +196,11 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Create user
+    // Create user (no password — employee sets it via invite link when appraisal is created)
     const user = await User.create({
       name,
       email,
-      password,
+      password: null,
       role,
       techLeadId: techLeadId || null,
       managerId: managerId || null

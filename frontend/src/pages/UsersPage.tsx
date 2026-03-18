@@ -330,7 +330,6 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
-  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>(user?.role ?? 'developer');
   const [techLeadId, setTechLeadId] = useState(user?.techLeadId ? String(user.techLeadId) : '');
   const [managerId, setManagerId] = useState(user?.managerId ? String(user.managerId) : '');
@@ -353,7 +352,6 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
         const payload: CreateUserPayload = {
           name,
           email,
-          password,
           role,
           techLeadId: techLeadId || undefined,
           managerId: managerId || undefined,
@@ -415,17 +413,9 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
             </div>
 
             {!isEditing && (
-              <div>
-                <label className="label">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  placeholder="Minimum 6 characters"
-                  required
-                />
-              </div>
+              <p className="text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+                The employee will receive an email with a link to set their password when an appraisal is created for them.
+              </p>
             )}
 
             <div>
@@ -486,7 +476,7 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
             </button>
             <button
               onClick={() => mutation.mutate()}
-              disabled={!name || !email || (!isEditing && !password) || mutation.isLoading}
+              disabled={!name || !email || mutation.isLoading}
               className="btn-primary flex-1"
             >
               {mutation.isLoading ? <LoadingSpinner size="sm" /> : isEditing ? 'Save Changes' : 'Create User'}

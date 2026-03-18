@@ -136,10 +136,21 @@ export async function notifyAppraiseeOnOpen(opts: {
   appraisalId: number;
   year: number;
   deadline?: Date | null;
+  invitationToken?: string;
 }) {
   const deadlineNote = opts.deadline
     ? `<p>Please complete it by <strong>${opts.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.</p>`
     : '';
+
+  const actionUrl = opts.invitationToken
+    ? `${APP_URL}/accept-invite?token=${opts.invitationToken}&redirect=/appraisals/${opts.appraisalId}`
+    : appraisalLink(opts.appraisalId);
+  const actionLabel = opts.invitationToken ? 'Set Password &amp; Start Appraisal' : 'Start Appraisal';
+
+  const inviteNote = opts.invitationToken
+    ? `<p style="color:#6b7280;font-size:14px">You'll be asked to set a password before accessing your appraisal. This link is valid for 30 days.</p>`
+    : '';
+
   await send(
     opts.appraiseeEmail,
     `Your ${opts.year} appraisal is now open`,
@@ -148,7 +159,8 @@ export async function notifyAppraiseeOnOpen(opts: {
       <p>Hi <strong>${opts.appraiseeName}</strong>,</p>
       <p>Your ${opts.year} self-assessment appraisal has been opened and is ready for you to fill in.</p>
       ${deadlineNote}
-      ${btn(appraisalLink(opts.appraisalId), 'Start Appraisal')}
+      ${inviteNote}
+      ${btn(actionUrl, actionLabel)}
     `)
   );
 }
