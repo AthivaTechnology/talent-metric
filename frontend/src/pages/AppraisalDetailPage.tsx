@@ -253,7 +253,6 @@ const RATING_LABELS: Record<number, string> = {
 // Advance stage button labels
 const ADVANCE_LABELS: Record<string, string> = {
   draft: 'Submit Appraisal',
-  submitted: 'Move to Tech Lead Review',
   tech_lead_review: 'Move to Manager Review',
   manager_review: 'Mark as Completed',
 };
@@ -587,28 +586,21 @@ export default function AppraisalDetailPage() {
   const canAdvance =
     !isCompleted &&
     ((isOwnAppraisal && isDraft) ||
-      // Tech lead can advance own submitted appraisal (skips TL review) or review a team member's
-      (user?.role === 'tech_lead' &&
-        (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
-      // Manager can advance own submitted appraisal (skips TL review) or finalize a reportee's
-      (user?.role === 'manager' &&
-        (appraisal.status === 'manager_review' ||
-          (isOwnAppraisal && appraisal.status === 'submitted'))) ||
+      (user?.role === 'tech_lead' && appraisal.status === 'tech_lead_review') ||
+      (user?.role === 'manager' && appraisal.status === 'manager_review') ||
       user?.role === 'admin');
 
   const canReviewRatings =
     !isOwnAppraisal &&
     !isCompleted &&
-    ((user?.role === 'tech_lead' &&
-        (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
+    ((user?.role === 'tech_lead' && appraisal.status === 'tech_lead_review') ||
       (user?.role === 'manager' && appraisal.status === 'manager_review'));
 
   const canReturn =
     !isOwnAppraisal &&
     !isCompleted &&
     !isDraft &&
-    ((user?.role === 'tech_lead' &&
-        (appraisal.status === 'submitted' || appraisal.status === 'tech_lead_review')) ||
+    ((user?.role === 'tech_lead' && appraisal.status === 'tech_lead_review') ||
       (user?.role === 'manager' && appraisal.status === 'manager_review') ||
       user?.role === 'admin');
 
@@ -644,12 +636,8 @@ export default function AppraisalDetailPage() {
   };
 
   // Tech leads and managers skip the TL review stage for their own appraisal
-  const skipsTechLeadReview =
-    appraisal.status === 'submitted' &&
-    (appraiseeRole === 'tech_lead' || appraiseeRole === 'manager');
-  const advanceLabel = skipsTechLeadReview
-    ? 'Move to Manager Review'
-    : ADVANCE_LABELS[appraisal.status] ?? 'Advance';
+  const skipsTechLeadReview = appraiseeRole === 'tech_lead' || appraiseeRole === 'manager';
+  const advanceLabel = ADVANCE_LABELS[appraisal.status] ?? 'Advance';
 
   const questionCommentMap: Record<string, Comment[]> = {};
   commentsQuery.data?.forEach((c) => {
@@ -1059,12 +1047,13 @@ export default function AppraisalDetailPage() {
             </div>
             <div className="card-body space-y-3">
               <div className="space-y-2">
-                {(['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'] as const)
-                  .filter((stage) => !(stage === 'tech_lead_review' && skipsTechLeadReview))
+                {(skipsTechLeadReview
+                    ? (['draft', 'manager_review', 'completed'] as const)
+                    : (['draft', 'tech_lead_review', 'manager_review', 'completed'] as const))
                   .map((stage) => {
                     const orderedStages = skipsTechLeadReview
-                      ? ['draft', 'submitted', 'manager_review', 'completed']
-                      : ['draft', 'submitted', 'tech_lead_review', 'manager_review', 'completed'];
+                      ? ['draft', 'manager_review', 'completed']
+                      : ['draft', 'tech_lead_review', 'manager_review', 'completed'];
                     const isPast = orderedStages.indexOf(stage) < orderedStages.indexOf(appraisal.status);
                     const isCurrent = appraisal.status === stage;
                     return (

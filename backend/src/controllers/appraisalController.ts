@@ -492,7 +492,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
 
     // Tech leads and managers skip the tech_lead_review stage for their own appraisals
     const skipTechLeadReview =
-      currentStatus === APPRAISAL_STATUS.SUBMITTED &&
+      currentStatus === APPRAISAL_STATUS.DRAFT &&
       appraiseeUser &&
       (appraiseeUser.role === USER_ROLES.TECH_LEAD || appraiseeUser.role === USER_ROLES.MANAGER);
     if (skipTechLeadReview) {
@@ -530,16 +530,9 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       }
 
       appraisal.submittedAt = new Date();
-    } else if (skipTechLeadReview) {
-      // Tech lead or manager advancing their own submitted appraisal directly to manager review
-      if (appraisal.userId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
-        res.status(HTTP_STATUS.FORBIDDEN).json({
-          success: false,
-          message: 'Only the appraisee or an admin can advance this appraisal'
-        });
-        return;
+      if (skipTechLeadReview) {
+        appraisal.techLeadReviewedAt = new Date();
       }
-      appraisal.techLeadReviewedAt = new Date();
     } else if (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
       // Tech lead reviewing a team member's appraisal
       const user = appraiseeUser;
@@ -581,16 +574,32 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
 
     // Send email notifications (fire-and-forget)
     const appraisalUser = (appraisal as any).user as User | null;
-    if (currentStatus === APPRAISAL_STATUS.DRAFT && appraisalUser?.techLeadId) {
-      const techLead = await User.findByPk(appraisalUser.techLeadId, { attributes: ['name', 'email'] });
-      if (techLead) {
-        notifyTechLeadOnSubmit({
-          techLeadEmail: techLead.email,
-          techLeadName: techLead.name,
-          developerName: appraisalUser.name,
-          appraisalId: appraisal.id,
-          year: appraisal.year
-        });
+    if (currentStatus === APPRAISAL_STATUS.DRAFT) {
+      if (skipTechLeadReview && appraisalUser?.managerId) {
+        // Tech lead/manager submitting their own appraisal — goes directly to manager review
+        const manager = await User.findByPk(appraisalUser.managerId, { attributes: ['name', 'email'] });
+        const reviewer = await User.findByPk(req.user!.id, { attributes: ['name'] });
+        if (manager) {
+          notifyManagerOnTechLeadReview({
+            managerEmail: manager.email,
+            managerName: manager.name,
+            developerName: appraisalUser.name,
+            techLeadName: reviewer?.name ?? appraisalUser.name,
+            appraisalId: appraisal.id,
+            year: appraisal.year
+          });
+        }
+      } else if (!skipTechLeadReview && appraisalUser?.techLeadId) {
+        const techLead = await User.findByPk(appraisalUser.techLeadId, { attributes: ['name', 'email'] });
+        if (techLead) {
+          notifyTechLeadOnSubmit({
+            techLeadEmail: techLead.email,
+            techLeadName: techLead.name,
+            developerName: appraisalUser.name,
+            appraisalId: appraisal.id,
+            year: appraisal.year
+          });
+        }
       }
     } else if (
       (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) &&
@@ -669,7 +678,7 @@ export const saveReviewerRatings = async (req: AuthRequest, res: Response): Prom
 
     if (req.user.role === USER_ROLES.TECH_LEAD) {
       if (appraisal.status !== APPRAISAL_STATUS.SUBMITTED && appraisal.status !== APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Tech lead can only rate during submitted or tech lead review stage' });
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Tech lead can only rate during tech lead review stage' });
         return;
       }
       if (!appraisalUser || appraisalUser.techLeadId !== req.user.id) {
