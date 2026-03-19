@@ -1057,25 +1057,29 @@ export default function AppraisalDetailPage() {
                       : ['draft', 'tech_lead_review', 'manager_review', 'completed'];
                     const isPast = orderedStages.indexOf(stage) < orderedStages.indexOf(appraisal.status);
                     const isCurrent = appraisal.status === stage;
+                    const label = stage === 'draft' && isPast ? 'Submitted' : stage.replace(/_/g, ' ');
                     return (
                       <div key={stage} className="flex items-center gap-2">
-                        <div
-                          className={clsx(
-                            'w-2 h-2 rounded-full flex-shrink-0',
-                            isCurrent ? 'bg-indigo-600' : isPast ? 'bg-green-500' : 'bg-slate-300'
-                          )}
-                        />
+                        {isPast ? (
+                          <CheckCircleIcon className="w-3.5 h-3.5 text-green-500 flex-shrink-0 -ml-px" />
+                        ) : (
+                          <div className="w-3.5 h-3.5 flex items-center justify-center flex-shrink-0">
+                            <div
+                              className={clsx(
+                                'w-2.5 h-2.5 rounded-full',
+                                isCurrent ? 'bg-indigo-600 ring-2 ring-indigo-200' : 'bg-slate-300'
+                              )}
+                            />
+                          </div>
+                        )}
                         <span
                           className={clsx(
                             'text-xs capitalize',
-                            isCurrent ? 'text-indigo-700 font-semibold' : 'text-slate-500'
+                            isCurrent ? 'text-indigo-700 font-semibold' : isPast ? 'text-green-700' : 'text-slate-400'
                           )}
                         >
-                          {stage.replace(/_/g, ' ')}
+                          {label}
                         </span>
-                        {isCurrent && (
-                          <CheckCircleIcon className="w-3.5 h-3.5 text-indigo-600 ml-auto" />
-                        )}
                       </div>
                     );
                   })}
