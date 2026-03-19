@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import AnthropicBedrock from '@anthropic-ai/bedrock-sdk';
 import crypto from 'crypto';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
@@ -1548,8 +1548,8 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
-      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'AI summary is not configured on this server. Set ANTHROPIC_API_KEY in the environment.' });
+    if (!process.env.AWS_REGION) {
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'AI summary is not configured on this server. Set AWS_REGION in the environment.' });
       return;
     }
 
@@ -1609,9 +1609,13 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
     const appraiseeUser = (appraisal as any).user;
     const prompt = `You are reviewing a self-assessment for ${appraiseeUser?.name ?? 'an employee'} (${appraiseeUser?.role ?? 'unknown role'}), ${appraisal.year} appraisal.\nSummarise their answers in 4 short paragraphs:\n1. Key achievements & impact\n2. Technical/professional strengths\n3. Areas for growth\n4. Overall impression\nKeep it factual, concise, and under 250 words.\n\n--- Self-Assessment ---\n${assessmentText}`;
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+    const client = new AnthropicBedrock({
+      awsRegion: process.env.AWS_REGION,
+      awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
+      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
+    });
+    const message = await client.messages.create({
+      model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       max_tokens: 512,
       messages: [{ role: 'user', content: prompt }]
     });
