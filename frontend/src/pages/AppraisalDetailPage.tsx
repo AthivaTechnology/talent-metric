@@ -360,6 +360,7 @@ export default function AppraisalDetailPage() {
     // Initialize manager feedback and consolidated rating
     setManagerFeedback(appraisal.managerFeedback ?? '');
     setManagerConsolidatedRating(appraisal.consolidatedRating ?? 0);
+    setAiSummary(appraisal.aiSummary ?? null);
     // Mark as initialized after a tick so auto-save effects don't fire on load
     setTimeout(() => { isInitializedRef.current = true; }, 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps

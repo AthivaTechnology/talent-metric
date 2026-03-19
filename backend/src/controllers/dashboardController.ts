@@ -36,9 +36,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       stats.draftAppraisals = await Appraisal.count({
         where: { year: currentYear, status: APPRAISAL_STATUS.DRAFT }
       });
-      stats.submittedAppraisals = await Appraisal.count({
-        where: { year: currentYear, status: APPRAISAL_STATUS.SUBMITTED }
-      });
+      stats.submittedAppraisals = 0;
       stats.techLeadReviewAppraisals = await Appraisal.count({
         where: { year: currentYear, status: APPRAISAL_STATUS.TECH_LEAD_REVIEW }
       });
@@ -88,9 +86,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       stats.draftAppraisals = await Appraisal.count({
         where: { year: currentYear, userId: { [Op.in]: reporteeIds }, status: APPRAISAL_STATUS.DRAFT }
       });
-      stats.submittedAppraisals = await Appraisal.count({
-        where: { year: currentYear, userId: { [Op.in]: reporteeIds }, status: APPRAISAL_STATUS.SUBMITTED }
-      });
+      stats.submittedAppraisals = 0;
       stats.techLeadReviewAppraisals = await Appraisal.count({
         where: { year: currentYear, userId: { [Op.in]: reporteeIds }, status: APPRAISAL_STATUS.TECH_LEAD_REVIEW }
       });
@@ -119,9 +115,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
       stats.draftAppraisals = await Appraisal.count({
         where: { year: currentYear, userId: { [Op.in]: teamMemberIds }, status: APPRAISAL_STATUS.DRAFT }
       });
-      stats.submittedAppraisals = await Appraisal.count({
-        where: { year: currentYear, userId: { [Op.in]: teamMemberIds }, status: APPRAISAL_STATUS.SUBMITTED }
-      });
+      stats.submittedAppraisals = 0;
       stats.techLeadReviewAppraisals = await Appraisal.count({
         where: { year: currentYear, userId: { [Op.in]: teamMemberIds }, status: APPRAISAL_STATUS.TECH_LEAD_REVIEW }
       });

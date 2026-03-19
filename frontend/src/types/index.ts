@@ -147,6 +147,7 @@ export interface Appraisal {
   comments?: Comment[];
   managerFeedback?: string | null;
   consolidatedRating?: number | null;
+  aiSummary?: string | null;
   createdAt: string;
   updatedAt: string;
 }

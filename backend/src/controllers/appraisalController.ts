@@ -1611,9 +1611,10 @@ export const generateSummary = async (req: AuthRequest, res: Response): Promise<
 
     const client = new AnthropicBedrock({
       awsRegion: process.env.AWS_REGION,
-      awsAccessKey: process.env.AWS_ACCESS_KEY_ID ?? null,
-      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY ?? null,
-    });
+      awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
+      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
+      awsSessionToken: process.env.AWS_SESSION_TOKEN,
+    } as any);
     const message = await client.messages.create({
       model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
       max_tokens: 512,
