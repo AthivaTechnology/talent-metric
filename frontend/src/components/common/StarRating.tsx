@@ -62,11 +62,6 @@ export default function StarRating({
           </svg>
         </button>
       ))}
-      {!readonly && (
-        <span className="ml-2 text-sm text-slate-500">
-          {displayed > 0 ? `${displayed}/5` : ''}
-        </span>
-      )}
     </div>
   );
 }
