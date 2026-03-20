@@ -7,6 +7,8 @@ import LoadingSpinner from '@components/common/LoadingSpinner';
 // Pages
 import LoginPage from '@pages/LoginPage';
 import AcceptInvitePage from '@pages/AcceptInvitePage';
+import ForgotPasswordPage from '@pages/ForgotPasswordPage';
+import ResetPasswordPage from '@pages/ResetPasswordPage';
 import DashboardPage from '@pages/DashboardPage';
 import AppraisalsPage from '@pages/AppraisalsPage';
 import AppraisalDetailPage from '@pages/AppraisalDetailPage';
@@ -29,6 +31,8 @@ export default function App() {
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Protected — layout wrapper */}
       <Route

@@ -186,3 +186,19 @@ export async function notifyOnComment(opts: {
     `)
   );
 }
+
+export async function sendPasswordResetEmail(opts: { email: string; name: string; token: string }) {
+  const resetUrl = `${APP_URL}/reset-password?token=${opts.token}`;
+  await send(
+    opts.email,
+    'Reset your Talent Metric password',
+    baseLayout(`
+      <h3 style="margin-top:0">Password Reset Request</h3>
+      <p>Hi <strong>${opts.name}</strong>,</p>
+      <p>We received a request to reset your password. Click the button below to set a new password. This link expires in 1 hour.</p>
+      ${btn(resetUrl, 'Reset Password')}
+      <p style="margin-top:16px;font-size:13px;color:#6b7280">If you didn't request this, you can safely ignore this email.</p>
+    `)
+  );
+}
+

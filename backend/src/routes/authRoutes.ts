@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, getMe, logout, changePassword, verifyInvite, acceptInvite } from '../controllers/authController';
+import { login, getMe, logout, changePassword, verifyInvite, acceptInvite, forgotPassword, resetPassword } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -45,5 +45,8 @@ router.get('/verify-invite/:token', verifyInvite);
  * @access  Public
  */
 router.post('/accept-invite', acceptInvite);
+
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 export default router;
