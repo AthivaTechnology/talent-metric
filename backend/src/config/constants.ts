@@ -3,7 +3,8 @@ export const USER_ROLES = {
   MANAGER: 'manager',
   TECH_LEAD: 'tech_lead',
   DEVELOPER: 'developer',
-  TESTER: 'tester'
+  TESTER: 'tester',
+  DEVOPS: 'devops'
 } as const;
 
 export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
@@ -30,7 +31,10 @@ export const RATING_CATEGORIES = [
   'team_management',
   'team_leadership',
   'people_development',
-  'strategic_thinking'
+  'strategic_thinking',
+  'infrastructure_skills',
+  'automation_skills',
+  'reliability'
 ] as const;
 
 export type RatingCategory = typeof RATING_CATEGORIES[number];
@@ -47,7 +51,10 @@ export const RATING_LABELS: Record<RatingCategory, string> = {
   team_management: 'Team Management',
   team_leadership: 'Team Leadership',
   people_development: 'People Development',
-  strategic_thinking: 'Strategic Thinking'
+  strategic_thinking: 'Strategic Thinking',
+  infrastructure_skills: 'Infrastructure Skills',
+  automation_skills: 'Automation & CI/CD',
+  reliability: 'Reliability & Observability'
 };
 
 // Rating categories applicable to each role (5 per role)
@@ -55,7 +62,8 @@ export const ROLE_RATING_CATEGORIES: Record<string, RatingCategory[]> = {
   developer: ['technical_skills', 'code_quality', 'ownership', 'problem_solving', 'communication'],
   tester: ['testing_skills', 'test_coverage', 'ownership', 'problem_solving', 'communication'],
   tech_lead: ['technical_leadership', 'team_management', 'ownership', 'problem_solving', 'communication'],
-  manager: ['team_leadership', 'people_development', 'strategic_thinking', 'problem_solving', 'communication']
+  manager: ['team_leadership', 'people_development', 'strategic_thinking', 'problem_solving', 'communication'],
+  devops: ['infrastructure_skills', 'automation_skills', 'reliability', 'problem_solving', 'communication']
 };
 
 export interface QuestionSection {
@@ -391,11 +399,94 @@ const MANAGER_QUESTIONS: QuestionSection[] = [
   }
 ];
 
+const DEVOPS_QUESTIONS: QuestionSection[] = [
+  {
+    section: 1,
+    sectionTitle: 'Achievements & Impact',
+    emoji: '🧠',
+    questions: [
+      'What were your top 3 DevOps/infrastructure contributions this review period?',
+      'Which infrastructure improvement or automation are you most proud of? Why?',
+      'What measurable impact did your work have? (Uptime, deployment frequency, MTTR, cost savings, etc.)',
+      'What was the biggest operational challenge you faced? How did you resolve it?',
+      'Did you complete all committed infrastructure or platform tasks on time? If not, why?'
+    ]
+  },
+  {
+    section: 2,
+    sectionTitle: 'Infrastructure & Cloud Skills',
+    emoji: '☁️',
+    questions: [
+      'What cloud platforms, tools, or infrastructure technologies did you work with or learn this period?',
+      'What area of infrastructure (networking, compute, storage, security, etc.) did you improve in most?',
+      'What infrastructure area do you feel least confident in?',
+      'How do you approach infrastructure-as-code and configuration management?',
+      'Give an example where you improved the scalability or reliability of a system.'
+    ]
+  },
+  {
+    section: 3,
+    sectionTitle: 'CI/CD & Automation',
+    emoji: '⚙️',
+    questions: [
+      'What CI/CD pipelines or automation workflows did you build or improve this period?',
+      'How do you ensure deployments are safe, repeatable, and rollback-friendly?',
+      'Have you reduced manual toil through automation? Explain.',
+      'What engineering practice do you think you need to improve? (Pipeline design, monitoring, security, etc.)'
+    ]
+  },
+  {
+    section: 4,
+    sectionTitle: 'Reliability & Observability',
+    emoji: '📡',
+    questions: [
+      'How do you ensure the reliability and availability of the systems you manage?',
+      'What monitoring, alerting, or observability improvements did you make this period?',
+      'Describe an incident you handled. How did you detect, resolve, and post-mortem it?',
+      'How do you balance speed of delivery with system stability?'
+    ]
+  },
+  {
+    section: 5,
+    sectionTitle: 'Problem Solving & Learning',
+    emoji: '🧩',
+    questions: [
+      'When facing a production incident, what steps do you take before escalating?',
+      'What was the most complex infrastructure problem you solved? How did you approach it?',
+      'How do you stay updated with new DevOps tools and cloud services?',
+      'What technology or practice did you self-learn recently?'
+    ]
+  },
+  {
+    section: 6,
+    sectionTitle: 'Communication & Collaboration',
+    emoji: '💬',
+    questions: [
+      'How do you communicate infrastructure changes and risks to development teams?',
+      'How do you handle disagreements about architecture or tooling choices?',
+      'Have you helped a teammate with infrastructure or platform issues? Explain.',
+      'What feedback have you received from peers or developers about your DevOps support?'
+    ]
+  },
+  {
+    section: 7,
+    sectionTitle: 'Growth & Future Goals',
+    emoji: '📈',
+    questions: [
+      'What are 3 DevOps or infrastructure areas you want to improve in the next 6 months?',
+      'What skills do you want to develop to move to the next level?',
+      'What support do you need from the company?',
+      'Where do you see yourself as a DevOps/platform engineer in 1 year?'
+    ]
+  }
+];
+
 export const ROLE_QUESTIONS: Record<string, QuestionSection[]> = {
   developer: DEVELOPER_QUESTIONS,
   tester: TESTER_QUESTIONS,
   tech_lead: TECH_LEAD_QUESTIONS,
-  manager: MANAGER_QUESTIONS
+  manager: MANAGER_QUESTIONS,
+  devops: DEVOPS_QUESTIONS
 };
 
 // Keep for backwards compatibility
@@ -425,8 +516,8 @@ export const ALL_FLAT_QUESTIONS: FlatQuestion[] = Object.entries(ROLE_QUESTIONS)
 
 // Workflow progression mapping
 export const WORKFLOW_TRANSITIONS: Record<AppraisalStatus, AppraisalStatus | null> = {
-  [APPRAISAL_STATUS.DRAFT]: APPRAISAL_STATUS.SUBMITTED,
-  [APPRAISAL_STATUS.SUBMITTED]: APPRAISAL_STATUS.TECH_LEAD_REVIEW,
+  [APPRAISAL_STATUS.DRAFT]: APPRAISAL_STATUS.TECH_LEAD_REVIEW,
+  [APPRAISAL_STATUS.SUBMITTED]: APPRAISAL_STATUS.TECH_LEAD_REVIEW, // legacy — auto-migrated to tech_lead_review on startup
   [APPRAISAL_STATUS.TECH_LEAD_REVIEW]: APPRAISAL_STATUS.MANAGER_REVIEW,
   [APPRAISAL_STATUS.MANAGER_REVIEW]: APPRAISAL_STATUS.COMPLETED,
   [APPRAISAL_STATUS.COMPLETED]: null
@@ -434,8 +525,8 @@ export const WORKFLOW_TRANSITIONS: Record<AppraisalStatus, AppraisalStatus | nul
 
 // Role permissions for status changes
 export const STATUS_CHANGE_PERMISSIONS: Record<AppraisalStatus, UserRole[]> = {
-  [APPRAISAL_STATUS.DRAFT]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER],
-  [APPRAISAL_STATUS.SUBMITTED]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER],
+  [APPRAISAL_STATUS.DRAFT]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER],
+  [APPRAISAL_STATUS.SUBMITTED]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER],
   [APPRAISAL_STATUS.TECH_LEAD_REVIEW]: [USER_ROLES.TECH_LEAD],
   [APPRAISAL_STATUS.MANAGER_REVIEW]: [USER_ROLES.MANAGER],
   [APPRAISAL_STATUS.COMPLETED]: [USER_ROLES.MANAGER]

@@ -7,37 +7,46 @@ interface UserAttributes {
   id: number;
   name: string;
   email: string;
-  password: string;
+  password: string | null;
   role: UserRole;
   techLeadId?: number | null;
   managerId?: number | null;
+  isActive: boolean;
+  invitationToken?: string | null;
+  invitationTokenExpiry?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'techLeadId' | 'managerId'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'techLeadId' | 'managerId' | 'isActive' | 'invitationToken' | 'invitationTokenExpiry'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   public id!: number;
   public name!: string;
   public email!: string;
-  public password!: string;
+  public password!: string | null;
   public role!: UserRole;
+  public invitationToken!: string | null;
+  public invitationTokenExpiry!: Date | null;
   public techLeadId!: number | null;
   public managerId!: number | null;
+  public isActive!: boolean;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 
   // Method to compare password
   public async comparePassword(candidatePassword: string): Promise<boolean> {
+    if (!this.password) return false;
     return bcrypt.compare(candidatePassword, this.password);
   }
 
-  // Method to exclude password from JSON
+  // Method to exclude sensitive fields from JSON
   public toJSON(): Partial<UserAttributes> {
     const values = { ...this.get() } as Partial<UserAttributes>;
     delete values.password;
+    delete values.invitationToken;
+    delete values.invitationTokenExpiry;
     return values;
   }
 }
@@ -77,16 +86,10 @@ User.init(
     },
     password: {
       type: DataTypes.STRING(255),
-      allowNull: false,
-      validate: {
-        len: {
-          args: [6, 255],
-          msg: 'Password must be at least 6 characters'
-        }
-      }
+      allowNull: true
     },
     role: {
-      type: DataTypes.ENUM('admin', 'manager', 'tech_lead', 'developer', 'tester'),
+      type: DataTypes.ENUM('admin', 'manager', 'tech_lead', 'developer', 'tester', 'devops'),
       allowNull: false,
       defaultValue: USER_ROLES.DEVELOPER,
       validate: {
@@ -113,6 +116,22 @@ User.init(
         key: 'id'
       },
       field: 'manager_id'
+    },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: 'is_active'
+    },
+    invitationToken: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'invitation_token'
+    },
+    invitationTokenExpiry: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'invitation_token_expiry'
     }
   },
   {
@@ -128,7 +147,7 @@ User.init(
         }
       },
       beforeUpdate: async (user: User) => {
-        if (user.changed('password')) {
+        if (user.changed('password') && user.password) {
           const salt = await bcrypt.genSalt(10);
           user.password = await bcrypt.hash(user.password, salt);
         }

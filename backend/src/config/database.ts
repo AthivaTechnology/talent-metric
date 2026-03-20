@@ -36,6 +36,15 @@ export const connectDatabase = async (): Promise<void> => {
       await sequelize.sync({ alter: true });
       console.log('✅ Database models synchronized.');
     }
+
+    // Migrate legacy 'submitted' appraisals to 'tech_lead_review'
+    const [count] = await sequelize.query(
+      `UPDATE appraisals SET status = 'tech_lead_review' WHERE status = 'submitted'`
+    );
+    const affected = (count as any).affectedRows ?? 0;
+    if (affected > 0) {
+      console.log(`✅ Migrated ${affected} appraisal(s) from 'submitted' to 'tech_lead_review'.`);
+    }
   } catch (error) {
     console.error('❌ Unable to connect to the database:', error);
     process.exit(1);

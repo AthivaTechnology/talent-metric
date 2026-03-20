@@ -32,7 +32,7 @@ export const getAllUsers = async (req: AuthRequest, res: Response): Promise<void
 
     const { rows: users, count: total } = await User.findAndCountAll({
       where: whereClause,
-      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId', 'createdAt'],
+      attributes: ['id', 'name', 'email', 'role', 'techLeadId', 'managerId', 'isActive', 'createdAt'],
       include: [
         {
           model: User,
@@ -132,10 +132,10 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
  */
 export const createUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, email, password, role, techLeadId, managerId } = req.body;
+    const { name, email, role, techLeadId, managerId } = req.body;
 
     // Validate required fields
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !role) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: ERROR_MESSAGES.MISSING_REQUIRED_FIELDS
@@ -149,15 +149,6 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       res.status(HTTP_STATUS.BAD_REQUEST).json({
         success: false,
         message: 'Invalid email format'
-      });
-      return;
-    }
-
-    // Validate password length
-    if (password.length < 6) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        success: false,
-        message: 'Password must be at least 6 characters'
       });
       return;
     }
@@ -205,11 +196,11 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Create user
+    // Create user (no password — employee sets it via invite link when appraisal is created)
     const user = await User.create({
       name,
       email,
-      password,
+      password: null,
       role,
       techLeadId: techLeadId || null,
       managerId: managerId || null
@@ -445,6 +436,61 @@ export const getManagers = async (_req: AuthRequest, res: Response): Promise<voi
   }
 };
 
+/**
+ * @desc    Deactivate a user (soft delete)
+ * @route   PATCH /api/users/:id/deactivate
+ * @access  Private/Admin
+ */
+export const deactivateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.USER_NOT_FOUND });
+      return;
+    }
+
+    if (req.user && req.user.id === parseInt(id)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'You cannot deactivate your own account' });
+      return;
+    }
+
+    user.isActive = false;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'User deactivated successfully' });
+  } catch (error) {
+    console.error('Deactivate user error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error deactivating user' });
+  }
+};
+
+/**
+ * @desc    Activate a user
+ * @route   PATCH /api/users/:id/activate
+ * @access  Private/Admin
+ */
+export const activateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.USER_NOT_FOUND });
+      return;
+    }
+
+    user.isActive = true;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'User activated successfully' });
+  } catch (error) {
+    console.error('Activate user error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error activating user' });
+  }
+};
+
 export default {
   getAllUsers,
   getUserById,
@@ -452,5 +498,7 @@ export default {
   updateUser,
   deleteUser,
   getTechLeads,
-  getManagers
+  getManagers,
+  deactivateUser,
+  activateUser
 };

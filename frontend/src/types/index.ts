@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester';
+export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester' | 'devops';
 
 export type AppraisalStatus =
   | 'draft'
@@ -19,7 +19,10 @@ export type RatingCategory =
   | 'team_management'
   | 'team_leadership'
   | 'people_development'
-  | 'strategic_thinking';
+  | 'strategic_thinking'
+  | 'infrastructure_skills'
+  | 'automation_skills'
+  | 'reliability';
 
 export interface RatingCategoryConfig {
   key: RatingCategory;
@@ -55,6 +58,13 @@ export const ROLE_RATING_CONFIGS: Record<string, RatingCategoryConfig[]> = {
     { key: 'strategic_thinking', label: 'Strategic Thinking', desc: 'Planning and aligning with business goals' },
     { key: 'problem_solving', label: 'Problem Solving', desc: 'Resolving conflicts and organizational challenges' },
     { key: 'communication', label: 'Communication', desc: 'Stakeholder management and team communication' }
+  ],
+  devops: [
+    { key: 'infrastructure_skills', label: 'Infrastructure Skills', desc: 'Cloud, networking, and infrastructure proficiency' },
+    { key: 'automation_skills', label: 'Automation & CI/CD', desc: 'Pipeline design, automation, and deployment practices' },
+    { key: 'reliability', label: 'Reliability & Observability', desc: 'System uptime, monitoring, and incident response' },
+    { key: 'problem_solving', label: 'Problem Solving', desc: 'Diagnosing and resolving complex infrastructure issues' },
+    { key: 'communication', label: 'Communication', desc: 'Collaborating with dev teams and stakeholders' }
   ]
 };
 
@@ -71,6 +81,7 @@ export interface User {
   managerId?: number | null;
   techLead?: Pick<User, 'id' | 'name' | 'email'>;
   manager?: Pick<User, 'id' | 'name' | 'email'>;
+  isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -107,9 +118,21 @@ export interface Comment {
   id: string;
   appraisalId: string;
   userId: string;
+  questionId?: string | null;
   user?: Pick<User, 'id' | 'name' | 'role'>;
   comment: string;
   createdAt: string;
+}
+
+export interface PeerFeedback {
+  id: string;
+  appraisalId: string;
+  giverId: string;
+  giver?: Pick<User, 'id' | 'name' | 'role'>;
+  didWell: string;
+  canImprove: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Appraisal {
@@ -122,8 +145,17 @@ export interface Appraisal {
   responses: Response[];
   ratings: Rating[];
   comments?: Comment[];
+  managerFeedback?: string | null;
+  consolidatedRating?: number | null;
+  aiSummary?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TrendPoint {
+  year: number;
+  avgRating: number | null;
+  completed: number;
 }
 
 export interface DashboardStats {
@@ -131,6 +163,8 @@ export interface DashboardStats {
   // admin
   totalUsers?: number;
   totalDevelopers?: number;
+  totalTesters?: number;
+  totalDevOps?: number;
   totalTechLeads?: number;
   totalManagers?: number;
   totalAppraisals?: number;
@@ -190,7 +224,6 @@ export interface LoginResponse {
 export interface CreateUserPayload {
   name: string;
   email: string;
-  password: string;
   role: UserRole;
   techLeadId?: number | string;
   managerId?: number | string;

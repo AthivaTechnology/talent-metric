@@ -6,6 +6,8 @@ import {
   PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
+  NoSymbolIcon,
+  CheckCircleIcon as CheckCircleOutlineIcon,
 } from '@heroicons/react/24/outline';
 import { Dialog } from '@headlessui/react';
 import { userService } from '@services/userService';
@@ -19,6 +21,7 @@ import clsx from 'clsx';
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'developer', label: 'Developer' },
   { value: 'tester', label: 'Tester' },
+  { value: 'devops', label: 'DevOps' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
   { value: 'admin', label: 'Admin' },
@@ -30,6 +33,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
   tester: 'bg-amber-100 text-amber-700',
+  devops: 'bg-cyan-100 text-cyan-700',
 };
 
 export default function UsersPage() {
@@ -62,6 +66,22 @@ export default function UsersPage() {
       queryClient.invalidateQueries(['users']);
     },
     onError: (err) => { toast.error(getErrorMessage(err, 'Failed to delete user')); },
+  });
+
+  const deactivateMutation = useMutation((id: number | string) => userService.deactivateUser(id), {
+    onSuccess: () => {
+      toast.success('User deactivated');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: (err) => { toast.error(getErrorMessage(err, 'Failed to deactivate user')); },
+  });
+
+  const activateMutation = useMutation((id: number | string) => userService.activateUser(id), {
+    onSuccess: () => {
+      toast.success('User activated');
+      queryClient.invalidateQueries(['users']);
+    },
+    onError: (err) => { toast.error(getErrorMessage(err, 'Failed to activate user')); },
   });
 
   return (
@@ -125,6 +145,7 @@ export default function UsersPage() {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Status</th>
                   <th>Reports To</th>
                   <th>Joined</th>
                   <th>Actions</th>
@@ -152,6 +173,16 @@ export default function UsersPage() {
                         {u.role.replace('_', ' ')}
                       </span>
                     </td>
+                    <td>
+                      <span className={clsx(
+                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                        u.isActive !== false
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-slate-100 text-slate-500'
+                      )}>
+                        {u.isActive !== false ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
                     <td className="text-slate-500">
                       {u.manager?.name ?? u.techLead?.name ?? '—'}
                     </td>
@@ -167,6 +198,25 @@ export default function UsersPage() {
                         >
                           <PencilSquareIcon className="w-4 h-4" />
                         </button>
+                        {u.isActive !== false ? (
+                          <button
+                            onClick={() => deactivateMutation.mutate(u.id)}
+                            disabled={deactivateMutation.isLoading}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600"
+                            title="Deactivate"
+                          >
+                            <NoSymbolIcon className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => activateMutation.mutate(u.id)}
+                            disabled={activateMutation.isLoading}
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-600"
+                            title="Activate"
+                          >
+                            <CheckCircleOutlineIcon className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeleteTarget(u)}
                           className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
@@ -280,7 +330,6 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
 
   const [name, setName] = useState(user?.name ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
-  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>(user?.role ?? 'developer');
   const [techLeadId, setTechLeadId] = useState(user?.techLeadId ? String(user.techLeadId) : '');
   const [managerId, setManagerId] = useState(user?.managerId ? String(user.managerId) : '');
@@ -303,7 +352,6 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
         const payload: CreateUserPayload = {
           name,
           email,
-          password,
           role,
           techLeadId: techLeadId || undefined,
           managerId: managerId || undefined,
@@ -322,8 +370,8 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
     }
   );
 
-  const showTechLead = role === 'developer' || role === 'tester';
-  const showManager = role === 'developer' || role === 'tester' || role === 'tech_lead';
+  const showTechLead = role === 'developer' || role === 'tester' || role === 'devops';
+  const showManager = role === 'developer' || role === 'tester' || role === 'devops' || role === 'tech_lead';
 
   return (
     <Dialog open onClose={onClose} className="relative z-50">
@@ -365,17 +413,9 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
             </div>
 
             {!isEditing && (
-              <div>
-                <label className="label">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  placeholder="Minimum 6 characters"
-                  required
-                />
-              </div>
+              <p className="text-sm text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+                The employee will receive an email with a link to set their password when an appraisal is created for them.
+              </p>
             )}
 
             <div>
@@ -436,7 +476,7 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
             </button>
             <button
               onClick={() => mutation.mutate()}
-              disabled={!name || !email || (!isEditing && !password) || mutation.isLoading}
+              disabled={!name || !email || mutation.isLoading}
               className="btn-primary flex-1"
             >
               {mutation.isLoading ? <LoadingSpinner size="sm" /> : isEditing ? 'Save Changes' : 'Create User'}

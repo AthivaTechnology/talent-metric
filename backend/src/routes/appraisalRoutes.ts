@@ -6,13 +6,29 @@ import {
   updateAppraisal,
   submitAppraisal,
   saveReviewerRatings,
+  saveManagerFeedback,
+  bulkCreateAppraisals,
+  returnAppraisal,
+  exportAppraisals,
   addComment,
   getComments,
-  deleteAppraisal
+  deleteAppraisal,
+  getPeerFeedback,
+  addPeerFeedback,
+  updatePeerFeedback,
+  deletePeerFeedback,
+  generateSummary
 } from '../controllers/appraisalController';
-import { authenticate, isAdmin } from '../middleware/auth';
+import { authenticate, isAdmin, isTechLeadOrAbove } from '../middleware/auth';
 
 const router = Router();
+
+/**
+ * @route   GET /api/appraisals/export
+ * @desc    Export appraisals as CSV
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.get('/export', authenticate, isTechLeadOrAbove, exportAppraisals);
 
 /**
  * @route   GET /api/appraisals
@@ -69,6 +85,62 @@ router.get('/:id/comments', authenticate, getComments);
  * @access  Private (Tech Lead, Manager, Admin)
  */
 router.post('/:id/comments', authenticate, addComment);
+
+/**
+ * @route   PUT /api/appraisals/:id/manager-feedback
+ * @desc    Save manager's final feedback
+ * @access  Private (Manager, Admin)
+ */
+router.put('/:id/manager-feedback', authenticate, saveManagerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/return
+ * @desc    Return appraisal to developer for revision
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.post('/:id/return', authenticate, isTechLeadOrAbove, returnAppraisal);
+
+/**
+ * @route   POST /api/appraisals/bulk
+ * @desc    Bulk create appraisals for all active users
+ * @access  Private (Admin)
+ */
+router.post('/bulk', authenticate, isAdmin, bulkCreateAppraisals);
+
+/**
+ * @route   GET /api/appraisals/:id/peer-feedback
+ * @desc    Get peer feedbacks for an appraisal
+ * @access  Private
+ */
+router.get('/:id/peer-feedback', authenticate, getPeerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/peer-feedback
+ * @desc    Add peer feedback
+ * @access  Private
+ */
+router.post('/:id/peer-feedback', authenticate, addPeerFeedback);
+
+/**
+ * @route   PUT /api/appraisals/:id/peer-feedback/:feedbackId
+ * @desc    Update own peer feedback
+ * @access  Private
+ */
+router.put('/:id/peer-feedback/:feedbackId', authenticate, updatePeerFeedback);
+
+/**
+ * @route   DELETE /api/appraisals/:id/peer-feedback/:feedbackId
+ * @desc    Delete peer feedback
+ * @access  Private
+ */
+router.delete('/:id/peer-feedback/:feedbackId', authenticate, deletePeerFeedback);
+
+/**
+ * @route   POST /api/appraisals/:id/summary
+ * @desc    Generate AI summary of self-assessment
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+router.post('/:id/summary', authenticate, generateSummary);
 
 /**
  * @route   DELETE /api/appraisals/:id

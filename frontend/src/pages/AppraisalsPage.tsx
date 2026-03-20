@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { PlusIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
 import { userService } from '@services/userService';
@@ -28,10 +28,22 @@ const YEAR_OPTIONS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear(
 const ROLES_THAT_CAN_CREATE: UserRole[] = ['admin'];
 
 const APPRAISABLE_ROLES: { value: string; label: string }[] = [
-  { value: 'developer', label: 'Developer / Tester' },
+  { value: 'developer', label: 'Developer / Tester / DevOps' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
 ];
+
+function getDeadlineBadge(deadline: string, isCompleted: boolean): 'overdue' | 'due-soon' | null {
+  if (isCompleted) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(deadline);
+  due.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((due.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays < 0) return 'overdue';
+  if (diffDays <= 3) return 'due-soon';
+  return null;
+}
 
 export default function AppraisalsPage() {
   const { user } = useAuth();
@@ -41,6 +53,7 @@ export default function AppraisalsPage() {
   const [yearFilter, setYearFilter] = useState<number | ''>('');
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   const limit = 10;
 
@@ -57,6 +70,21 @@ export default function AppraisalsPage() {
   );
 
   const canCreate = user && ROLES_THAT_CAN_CREATE.includes(user.role);
+  const canExport = user && ['admin', 'manager', 'tech_lead'].includes(user.role);
+
+  const handleExport = async () => {
+    try {
+      const blob = await appraisalService.exportAppraisals(yearFilter ? { year: yearFilter as number } : undefined);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `appraisals_${yearFilter || 'all'}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export appraisals');
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -68,15 +96,31 @@ export default function AppraisalsPage() {
             {data ? `${data.total} total appraisals` : 'Loading...'}
           </p>
         </div>
-        {canCreate && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary"
-          >
-            <PlusIcon className="w-4 h-4" />
-            New Appraisal
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canExport && (
+            <button onClick={handleExport} className="btn-secondary">
+              <ArrowDownTrayIcon className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+          {canCreate && (
+            <>
+              <button
+                onClick={() => setShowBulkModal(true)}
+                className="btn-secondary"
+              >
+                Bulk Create
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="btn-primary"
+              >
+                <PlusIcon className="w-4 h-4" />
+                New Appraisal
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -159,7 +203,17 @@ export default function AppraisalsPage() {
                       <StatusBadge status={a.status as AppraisalStatus} />
                     </td>
                     <td className="text-slate-500">
-                      {a.deadline ? format(new Date(a.deadline), 'MMM d, yyyy') : '—'}
+                      {a.deadline ? (
+                        <span className="flex items-center gap-1.5 flex-wrap">
+                          <span>{format(new Date(a.deadline), 'MMM d, yyyy')}</span>
+                          {getDeadlineBadge(a.deadline, a.status === 'completed') === 'overdue' && (
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Overdue</span>
+                          )}
+                          {getDeadlineBadge(a.deadline, a.status === 'completed') === 'due-soon' && (
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">Due soon</span>
+                          )}
+                        </span>
+                      ) : '—'}
                     </td>
                     <td className="text-slate-500">
                       {format(new Date(a.updatedAt), 'MMM d, yyyy')}
@@ -215,6 +269,17 @@ export default function AppraisalsPage() {
           }}
         />
       )}
+
+      {/* Bulk create modal */}
+      {showBulkModal && (
+        <BulkCreateModal
+          onClose={() => setShowBulkModal(false)}
+          onCreated={() => {
+            queryClient.invalidateQueries(['appraisals']);
+            setShowBulkModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -235,6 +300,91 @@ function ClipboardDocumentListEmpty() {
       <p className="text-sm font-medium text-slate-600">No appraisals found</p>
       <p className="text-xs">Adjust the filters or create a new appraisal.</p>
     </div>
+  );
+}
+
+// Bulk create modal (admin only)
+interface BulkCreateModalProps {
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+function BulkCreateModal({ onClose, onCreated }: BulkCreateModalProps) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [deadline, setDeadline] = useState('');
+
+  const mutation = useMutation(
+    () => appraisalService.bulkCreate({ year, deadline: deadline || undefined }),
+    {
+      onSuccess: (result) => {
+        toast.success(`Created ${result.created} appraisals, skipped ${result.skipped} (already exist)`);
+        onCreated();
+      },
+      onError: (err: unknown) => {
+        toast.error(getErrorMessage(err, 'Bulk create failed'));
+      },
+    }
+  );
+
+  return (
+    <Dialog open onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-md bg-white rounded-2xl shadow-xl">
+          <div className="flex items-center justify-between p-6 border-b border-slate-200">
+            <div>
+              <Dialog.Title className="text-lg font-semibold text-slate-900">
+                Bulk Create Appraisals
+              </Dialog.Title>
+              <p className="text-sm text-slate-500 mt-0.5">
+                Create appraisals for all users who don't have one for the selected year
+              </p>
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 ml-4 flex-shrink-0">
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="label">Year</label>
+              <select
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                className="input"
+              >
+                {YEAR_OPTIONS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Deadline (optional)</label>
+              <input
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="input"
+                min={format(new Date(), 'yyyy-MM-dd')}
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 px-6 pb-6">
+            <button onClick={onClose} className="btn-secondary flex-1">
+              Cancel
+            </button>
+            <button
+              onClick={() => mutation.mutate()}
+              disabled={mutation.isLoading}
+              className="btn-primary flex-1"
+            >
+              {mutation.isLoading ? <LoadingSpinner size="sm" /> : `Create for ${year}`}
+            </button>
+          </div>
+        </Dialog.Panel>
+      </div>
+    </Dialog>
   );
 }
 
@@ -261,8 +411,14 @@ function CreateAppraisalModal({ onClose, onCreated }: CreateAppraisalModalProps)
     { enabled: selectedRole === 'developer' }
   );
 
+  const { data: devopsData } = useQuery(
+    ['users', { role: 'devops' }],
+    () => userService.getUsers({ role: 'devops', limit: 100 }),
+    { enabled: selectedRole === 'developer' }
+  );
+
   const employeeOptions = selectedRole === 'developer'
-    ? [...(userData?.users ?? []), ...(testerData?.users ?? [])]
+    ? [...(userData?.users ?? []), ...(testerData?.users ?? []), ...(devopsData?.users ?? [])]
     : (userData?.users ?? []);
 
   const mutation = useMutation(

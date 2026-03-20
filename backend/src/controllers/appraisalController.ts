@@ -1,6 +1,8 @@
+import AnthropicBedrock from '@anthropic-ai/bedrock-sdk';
+import crypto from 'crypto';
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
-import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question } from '../models';
+import { Appraisal, Response as ResponseModel, Rating, Comment, User, Question, PeerFeedback } from '../models';
 import {
   HTTP_STATUS,
   ERROR_MESSAGES,
@@ -10,6 +12,14 @@ import {
   WORKFLOW_TRANSITIONS
 } from '../config/constants';
 import { Op } from 'sequelize';
+import {
+  notifyTechLeadOnSubmit,
+  notifyManagerOnTechLeadReview,
+  notifyDeveloperOnComplete,
+  notifyDeveloperOnReturn,
+  notifyOnComment,
+  notifyAppraiseeOnOpen
+} from '../services/emailService';
 
 /**
  * @desc    Get all appraisals (filtered by role)
@@ -272,6 +282,25 @@ export const createAppraisal = async (req: AuthRequest, res: Response): Promise<
     }));
     await ResponseModel.bulkCreate(responses);
 
+    // If user has no password yet, generate an invitation token so they can set one via email
+    let invitationToken: string | undefined;
+    if (!user.password) {
+      invitationToken = crypto.randomBytes(32).toString('hex');
+      await user.update({
+        invitationToken,
+        invitationTokenExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      });
+    }
+
+    notifyAppraiseeOnOpen({
+      appraiseeEmail: user.email,
+      appraiseeName: user.name,
+      appraisalId: appraisal.id,
+      year: appraisal.year,
+      deadline: appraisal.deadline,
+      invitationToken
+    });
+
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
       message: SUCCESS_MESSAGES.APPRAISAL_CREATED,
@@ -448,7 +477,7 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
 
     // Validate workflow transition
     const currentStatus = appraisal.status;
-    const nextStatus = WORKFLOW_TRANSITIONS[currentStatus];
+    let nextStatus = WORKFLOW_TRANSITIONS[currentStatus];
 
     if (!nextStatus) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -456,6 +485,18 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
         message: 'Appraisal is already completed'
       });
       return;
+    }
+
+    // Fetch the appraisee to check their role for skip logic
+    const appraiseeUser = await User.findByPk(appraisal.userId);
+
+    // Tech leads and managers skip the tech_lead_review stage for their own appraisals
+    const skipTechLeadReview =
+      currentStatus === APPRAISAL_STATUS.DRAFT &&
+      appraiseeUser &&
+      (appraiseeUser.role === USER_ROLES.TECH_LEAD || appraiseeUser.role === USER_ROLES.MANAGER);
+    if (skipTechLeadReview) {
+      nextStatus = APPRAISAL_STATUS.MANAGER_REVIEW;
     }
 
     // Check permissions based on current status
@@ -489,9 +530,12 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
       }
 
       appraisal.submittedAt = new Date();
+      if (skipTechLeadReview) {
+        appraisal.techLeadReviewedAt = new Date();
+      }
     } else if (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
-      // Tech lead reviewing
-      const user = await User.findByPk(appraisal.userId);
+      // Tech lead reviewing a team member's appraisal
+      const user = appraiseeUser;
       if (!user || user.techLeadId !== req.user.id) {
         res.status(HTTP_STATUS.FORBIDDEN).json({
           success: false,
@@ -512,6 +556,14 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
         return;
       }
 
+      if (!appraisal.consolidatedRating) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'A consolidated rating is required before marking this appraisal as completed'
+        });
+        return;
+      }
+
       appraisal.managerReviewedAt = new Date();
       appraisal.completedAt = new Date();
     }
@@ -519,6 +571,62 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
     // Update status
     appraisal.status = nextStatus;
     await appraisal.save();
+
+    // Send email notifications (fire-and-forget)
+    const appraisalUser = (appraisal as any).user as User | null;
+    if (currentStatus === APPRAISAL_STATUS.DRAFT) {
+      if (skipTechLeadReview && appraisalUser?.managerId) {
+        // Tech lead/manager submitting their own appraisal — goes directly to manager review
+        const manager = await User.findByPk(appraisalUser.managerId, { attributes: ['name', 'email'] });
+        const reviewer = await User.findByPk(req.user!.id, { attributes: ['name'] });
+        if (manager) {
+          notifyManagerOnTechLeadReview({
+            managerEmail: manager.email,
+            managerName: manager.name,
+            developerName: appraisalUser.name,
+            techLeadName: reviewer?.name ?? appraisalUser.name,
+            appraisalId: appraisal.id,
+            year: appraisal.year
+          });
+        }
+      } else if (!skipTechLeadReview && appraisalUser?.techLeadId) {
+        const techLead = await User.findByPk(appraisalUser.techLeadId, { attributes: ['name', 'email'] });
+        if (techLead) {
+          notifyTechLeadOnSubmit({
+            techLeadEmail: techLead.email,
+            techLeadName: techLead.name,
+            developerName: appraisalUser.name,
+            appraisalId: appraisal.id,
+            year: appraisal.year
+          });
+        }
+      }
+    } else if (
+      (currentStatus === APPRAISAL_STATUS.SUBMITTED || currentStatus === APPRAISAL_STATUS.TECH_LEAD_REVIEW) &&
+      appraisalUser?.managerId
+    ) {
+      const manager = await User.findByPk(appraisalUser.managerId, { attributes: ['name', 'email'] });
+      const reviewer = await User.findByPk(req.user!.id, { attributes: ['name'] });
+      if (manager) {
+        notifyManagerOnTechLeadReview({
+          managerEmail: manager.email,
+          managerName: manager.name,
+          developerName: appraisalUser.name,
+          techLeadName: reviewer?.name ?? 'Tech Lead',
+          appraisalId: appraisal.id,
+          year: appraisal.year
+        });
+      }
+    } else if (currentStatus === APPRAISAL_STATUS.MANAGER_REVIEW && appraisalUser) {
+      const manager = await User.findByPk(req.user!.id, { attributes: ['name'] });
+      notifyDeveloperOnComplete({
+        developerEmail: appraisalUser.email,
+        developerName: appraisalUser.name,
+        managerName: manager?.name ?? 'Manager',
+        appraisalId: appraisal.id,
+        year: appraisal.year
+      });
+    }
 
     res.status(HTTP_STATUS.OK).json({
       success: true,
@@ -570,7 +678,7 @@ export const saveReviewerRatings = async (req: AuthRequest, res: Response): Prom
 
     if (req.user.role === USER_ROLES.TECH_LEAD) {
       if (appraisal.status !== APPRAISAL_STATUS.SUBMITTED && appraisal.status !== APPRAISAL_STATUS.TECH_LEAD_REVIEW) {
-        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Tech lead can only rate during submitted or tech lead review stage' });
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Tech lead can only rate during tech lead review stage' });
         return;
       }
       if (!appraisalUser || appraisalUser.techLeadId !== req.user.id) {
@@ -588,8 +696,6 @@ export const saveReviewerRatings = async (req: AuthRequest, res: Response): Prom
         return;
       }
       raterRole = 'manager';
-    } else if (req.user.role === USER_ROLES.ADMIN) {
-      raterRole = appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW ? 'manager' : 'tech_lead';
     } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only tech leads and managers can submit reviewer ratings' });
       return;
@@ -631,7 +737,7 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
     }
 
     const { id } = req.params;
-    const { comment } = req.body;
+    const { comment, questionId } = req.body;
 
     if (!comment || comment.trim().length < 10) {
       res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -658,6 +764,44 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
+    // Per-question comment path: any authenticated user can comment on a specific question
+    if (questionId) {
+      const parsedQuestionId = parseInt(questionId, 10);
+      if (isNaN(parsedQuestionId) || parsedQuestionId <= 0) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({
+          success: false,
+          message: 'Invalid questionId'
+        });
+        return;
+      }
+
+      const newComment = await Comment.create({
+        appraisalId: appraisal.id,
+        userId: req.user.id,
+        questionId: parsedQuestionId,
+        comment: comment.trim(),
+        stage: 'question_comment'
+      });
+
+      const commentWithUser = await Comment.findByPk(newComment.id, {
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'name', 'email', 'role']
+          }
+        ]
+      });
+
+      res.status(HTTP_STATUS.CREATED).json({
+        success: true,
+        message: SUCCESS_MESSAGES.COMMENT_ADDED,
+        data: commentWithUser
+      });
+      return;
+    }
+
+    // Appraisal-level comment path: existing role-based logic
     // Determine stage based on user role and appraisal status
     let stage = '';
     const user = (appraisal as any).user;
@@ -677,6 +821,16 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
       req.user.role === USER_ROLES.MANAGER && appraisal.userId === req.user.id
     ) {
       stage = 'manager_review';
+    } else if (appraisal.userId === req.user.id) {
+      // Developer/Tester/DevOps replying on their own appraisal (only during active review)
+      if (appraisal.status === APPRAISAL_STATUS.DRAFT || appraisal.status === APPRAISAL_STATUS.COMPLETED) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({
+          success: false,
+          message: 'You can only reply when your appraisal is under review'
+        });
+        return;
+      }
+      stage = 'developer_reply';
     } else {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,
@@ -702,6 +856,41 @@ export const addComment = async (req: AuthRequest, res: Response): Promise<void>
         }
       ]
     });
+
+    // Notify the relevant party about the new comment
+    const commenter = await User.findByPk(req.user.id, { attributes: ['name'] });
+    if (stage === 'developer_reply') {
+      // Developer replied — notify their tech lead or manager depending on current status
+      const reviewerIds: number[] = [];
+      if (user?.techLeadId) reviewerIds.push(user.techLeadId);
+      if (user?.managerId && appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW) reviewerIds.push(user.managerId);
+      for (const reviewerId of reviewerIds) {
+        const reviewer = await User.findByPk(reviewerId, { attributes: ['name', 'email'] });
+        if (reviewer) {
+          notifyOnComment({
+            recipientEmail: reviewer.email,
+            recipientName: reviewer.name,
+            commenterName: commenter?.name ?? 'Employee',
+            appraisalId: appraisal.id,
+            year: appraisal.year,
+            stage
+          });
+        }
+      }
+    } else {
+      // Reviewer commented — notify the appraisee
+      const appraisee = await User.findByPk(appraisal.userId, { attributes: ['name', 'email'] });
+      if (appraisee) {
+        notifyOnComment({
+          recipientEmail: appraisee.email,
+          recipientName: appraisee.name,
+          commenterName: commenter?.name ?? 'Reviewer',
+          appraisalId: appraisal.id,
+          year: appraisal.year,
+          stage
+        });
+      }
+    }
 
     res.status(HTTP_STATUS.CREATED).json({
       success: true,
@@ -847,6 +1036,605 @@ const checkAppraisalAccess = async (
   return false;
 };
 
+/**
+ * @desc    Save manager's final feedback on an appraisal
+ * @route   PUT /api/appraisals/:id/manager-feedback
+ * @access  Private (Manager, Admin)
+ */
+export const saveManagerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { id } = req.params;
+    const { feedback, consolidatedRating } = req.body;
+
+    const appraisal = await Appraisal.findByPk(id, {
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const appraisalUser = (appraisal as any).user as User | null;
+
+    if (req.user.role === USER_ROLES.MANAGER) {
+      if (appraisal.status !== APPRAISAL_STATUS.MANAGER_REVIEW && appraisal.status !== APPRAISAL_STATUS.COMPLETED) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Feedback can only be added during manager review stage' });
+        return;
+      }
+      if (!appraisalUser || appraisalUser.managerId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only provide feedback for your own reportees' });
+        return;
+      }
+    } else {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only managers can provide final feedback' });
+      return;
+    }
+
+    appraisal.managerFeedback = feedback?.trim() || null;
+
+    if (consolidatedRating !== undefined) {
+      if (consolidatedRating !== null && (consolidatedRating < 1 || consolidatedRating > 5)) {
+        res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Consolidated rating must be between 1 and 5' });
+        return;
+      }
+      appraisal.consolidatedRating = consolidatedRating ?? null;
+    }
+
+    await appraisal.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Feedback saved', data: { managerFeedback: appraisal.managerFeedback, consolidatedRating: appraisal.consolidatedRating } });
+  } catch (error) {
+    console.error('Save manager feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error saving feedback' });
+  }
+};
+
+/**
+ * @desc    Bulk create appraisals for all active users
+ * @route   POST /api/appraisals/bulk
+ * @access  Private (Admin only)
+ */
+export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { year, deadline } = req.body;
+
+    if (!year) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Year is required' });
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    if (year < 2000 || year > currentYear + 1) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: ERROR_MESSAGES.INVALID_YEAR });
+      return;
+    }
+
+    const users = await User.findAll({
+      where: { role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] } }
+    });
+
+    const existingAppraisals = await Appraisal.findAll({
+      where: { year, userId: { [Op.in]: users.map(u => u.id) } },
+      attributes: ['userId']
+    });
+    const existingUserIds = new Set(existingAppraisals.map(a => a.userId));
+
+    let created = 0;
+    for (const user of users) {
+      if (existingUserIds.has(user.id)) continue;
+
+      const appraisal = await Appraisal.create({
+        userId: user.id,
+        year,
+        status: APPRAISAL_STATUS.DRAFT,
+        deadline: deadline ? new Date(deadline) : null
+      });
+
+      const questions = await Question.findAll({ where: { applicableRole: user.role } });
+      if (questions.length > 0) {
+        await ResponseModel.bulkCreate(questions.map(q => ({ appraisalId: appraisal.id, questionId: q.id, answer: '' })));
+      }
+
+      notifyAppraiseeOnOpen({
+        appraiseeEmail: user.email,
+        appraiseeName: user.name,
+        appraisalId: appraisal.id,
+        year: appraisal.year,
+        deadline: appraisal.deadline
+      });
+
+      created++;
+    }
+
+    const skipped = users.length - created;
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: `Created ${created} appraisal${created !== 1 ? 's' : ''}${skipped > 0 ? `, skipped ${skipped} (already exist)` : ''}.`,
+      data: { created, skipped }
+    });
+  } catch (error) {
+    console.error('Bulk create appraisals error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error creating appraisals' });
+  }
+};
+
+/**
+ * @desc    Return appraisal to developer for revision
+ * @route   POST /api/appraisals/:id/return
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const returnAppraisal = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const appraisal = await Appraisal.findByPk(id, {
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const appraisalUser = (appraisal as any).user as User | null;
+
+    // Validate who can return and from which status
+    const returnableStatuses = [
+      APPRAISAL_STATUS.SUBMITTED,
+      APPRAISAL_STATUS.TECH_LEAD_REVIEW,
+      APPRAISAL_STATUS.MANAGER_REVIEW
+    ];
+
+    if (!returnableStatuses.includes(appraisal.status as any)) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: `Cannot return appraisal in "${appraisal.status}" status`
+      });
+      return;
+    }
+
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      if (!appraisalUser || appraisalUser.techLeadId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only return appraisals of your team members' });
+        return;
+      }
+      if (appraisal.status === APPRAISAL_STATUS.MANAGER_REVIEW) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Appraisal is already in manager review' });
+        return;
+      }
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      if (!appraisalUser || appraisalUser.managerId !== req.user.id) {
+        res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only return appraisals of your reportees' });
+        return;
+      }
+    } else if (req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    appraisal.status = APPRAISAL_STATUS.DRAFT;
+    appraisal.submittedAt = null as any;
+    appraisal.techLeadReviewedAt = null as any;
+    appraisal.managerReviewedAt = null as any;
+    await appraisal.save();
+
+    // Add a system comment with the reason if provided
+    if (reason && reason.trim().length >= 10) {
+      await Comment.create({
+        appraisalId: appraisal.id,
+        userId: req.user.id,
+        comment: `[Returned for revision] ${reason.trim()}`,
+        stage: 'returned'
+      });
+    }
+
+    // Notify developer
+    if (appraisalUser) {
+      const reviewer = await User.findByPk(req.user.id, { attributes: ['name'] });
+      notifyDeveloperOnReturn({
+        developerEmail: appraisalUser.email,
+        developerName: appraisalUser.name,
+        reviewerName: reviewer?.name ?? 'Reviewer',
+        appraisalId: appraisal.id,
+        year: appraisal.year,
+        reason: reason?.trim()
+      });
+    }
+
+    res.status(HTTP_STATUS.OK).json({
+      success: true,
+      message: 'Appraisal returned to developer for revision',
+      data: appraisal
+    });
+  } catch (error) {
+    console.error('Return appraisal error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error returning appraisal' });
+  }
+};
+
+/**
+ * @desc    Export appraisals as CSV
+ * @route   GET /api/appraisals/export
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const exportAppraisals = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER || req.user.role === USER_ROLES.DEVOPS) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const { year } = req.query;
+    const whereClause: any = {};
+    if (year) whereClause.year = parseInt(year as string);
+
+    let userIds: number[] | null = null;
+
+    if (req.user.role === USER_ROLES.TECH_LEAD) {
+      const teamMembers = await User.findAll({ where: { techLeadId: req.user.id }, attributes: ['id'] });
+      userIds = teamMembers.map(m => m.id);
+    } else if (req.user.role === USER_ROLES.MANAGER) {
+      const reportees = await User.findAll({ where: { managerId: req.user.id }, attributes: ['id'] });
+      userIds = reportees.map(r => r.id);
+    }
+
+    if (userIds !== null) {
+      whereClause.userId = { [Op.in]: userIds };
+    }
+
+    const appraisals = await Appraisal.findAll({
+      where: whereClause,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'email', 'role'] },
+        { model: Rating, as: 'ratings' }
+      ],
+      order: [['year', 'DESC'], ['updatedAt', 'DESC']]
+    });
+
+    // Build CSV
+    const rows: string[] = [
+      'ID,Year,Employee,Email,Role,Status,Deadline,Avg Self Rating,Submitted At,Completed At'
+    ];
+
+    appraisals.forEach(appraisal => {
+      const user = (appraisal as any).user;
+      const ratings = ((appraisal as any).ratings as any[]).filter(r => !r.raterRole || r.raterRole === 'self');
+      const avgRating = ratings.length > 0
+        ? (ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length).toFixed(2)
+        : '';
+
+      const escape = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      rows.push([
+        appraisal.id,
+        appraisal.year,
+        escape(user?.name ?? ''),
+        escape(user?.email ?? ''),
+        escape(user?.role ?? ''),
+        appraisal.status,
+        appraisal.deadline ? new Date(appraisal.deadline).toISOString().split('T')[0] : '',
+        avgRating,
+        appraisal.submittedAt ? new Date(appraisal.submittedAt).toISOString().split('T')[0] : '',
+        appraisal.completedAt ? new Date(appraisal.completedAt).toISOString().split('T')[0] : ''
+      ].join(','));
+    });
+
+    const csv = rows.join('\n');
+    const filename = `appraisals_${year || 'all'}_${Date.now()}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(HTTP_STATUS.OK).send(csv);
+  } catch (error) {
+    console.error('Export appraisals error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error exporting appraisals' });
+  }
+};
+
+/**
+ * @desc    Get peer feedbacks for an appraisal
+ * @route   GET /api/appraisals/:id/peer-feedback
+ * @access  Private (Manager, Admin)
+ */
+export const getPeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    if (req.user.role !== USER_ROLES.MANAGER && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only managers can view peer feedback' });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id);
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    const feedbacks = await PeerFeedback.findAll({
+      where: { appraisalId: appraisal.id },
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }],
+      order: [['createdAt', 'ASC']]
+    });
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: feedbacks });
+  } catch (error) {
+    console.error('Get peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error fetching peer feedback' });
+  }
+};
+
+/**
+ * @desc    Add peer feedback for an appraisal
+ * @route   POST /api/appraisals/:id/peer-feedback
+ * @access  Private (any user except the appraisee)
+ */
+export const addPeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id);
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    if (appraisal.userId === req.user.id) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You cannot give peer feedback on your own appraisal' });
+      return;
+    }
+
+    const { didWell, canImprove } = req.body;
+
+    if (!didWell || didWell.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they did well" must be at least 5 characters' });
+      return;
+    }
+    if (!canImprove || canImprove.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they can improve" must be at least 5 characters' });
+      return;
+    }
+
+    const existing = await PeerFeedback.findOne({ where: { appraisalId: appraisal.id, giverId: req.user.id } });
+    if (existing) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'You have already submitted peer feedback for this appraisal' });
+      return;
+    }
+
+    const feedback = await PeerFeedback.create({
+      appraisalId: appraisal.id,
+      giverId: req.user.id,
+      didWell: didWell.trim(),
+      canImprove: canImprove.trim()
+    });
+
+    const feedbackWithGiver = await PeerFeedback.findByPk(feedback.id, {
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }]
+    });
+
+    res.status(HTTP_STATUS.CREATED).json({ success: true, message: 'Peer feedback submitted', data: feedbackWithGiver });
+  } catch (error) {
+    console.error('Add peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error submitting peer feedback' });
+  }
+};
+
+/**
+ * @desc    Update own peer feedback
+ * @route   PUT /api/appraisals/:id/peer-feedback/:feedbackId
+ * @access  Private (giver only)
+ */
+export const updatePeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const feedback = await PeerFeedback.findByPk(req.params.feedbackId);
+    if (!feedback) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: 'Peer feedback not found' });
+      return;
+    }
+
+    if (feedback.giverId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only edit your own feedback' });
+      return;
+    }
+
+    const { didWell, canImprove } = req.body;
+
+    if (!didWell || didWell.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they did well" must be at least 5 characters' });
+      return;
+    }
+    if (!canImprove || canImprove.trim().length < 5) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: '"What they can improve" must be at least 5 characters' });
+      return;
+    }
+
+    await feedback.update({ didWell: didWell.trim(), canImprove: canImprove.trim() });
+
+    const updated = await PeerFeedback.findByPk(feedback.id, {
+      include: [{ model: User, as: 'giver', attributes: ['id', 'name', 'role'] }]
+    });
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Peer feedback updated', data: updated });
+  } catch (error) {
+    console.error('Update peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error updating peer feedback' });
+  }
+};
+
+/**
+ * @desc    Delete peer feedback
+ * @route   DELETE /api/appraisals/:id/peer-feedback/:feedbackId
+ * @access  Private (giver or admin)
+ */
+export const deletePeerFeedback = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    const feedback = await PeerFeedback.findByPk(req.params.feedbackId);
+    if (!feedback) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: 'Peer feedback not found' });
+      return;
+    }
+
+    if (feedback.giverId !== req.user.id && req.user.role !== USER_ROLES.ADMIN) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'You can only delete your own feedback' });
+      return;
+    }
+
+    await feedback.destroy();
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Peer feedback deleted' });
+  } catch (error) {
+    console.error('Delete peer feedback error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error deleting peer feedback' });
+  }
+};
+
+/**
+ * @desc    Generate AI summary of self-assessment answers
+ * @route   POST /api/appraisals/:id/summary
+ * @access  Private (Tech Lead, Manager, Admin)
+ */
+export const generateSummary = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(HTTP_STATUS.UNAUTHORIZED).json({ success: false, message: ERROR_MESSAGES.UNAUTHORIZED });
+      return;
+    }
+
+    // Only reviewers can generate
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
+      res.status(HTTP_STATUS.FORBIDDEN).json({ success: false, message: 'Only reviewers can generate summaries' });
+      return;
+    }
+
+    if (!process.env.AWS_REGION) {
+      res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'AI summary is not configured on this server. Set AWS_REGION in the environment.' });
+      return;
+    }
+
+    const appraisal = await Appraisal.findByPk(req.params.id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'role']
+        },
+        {
+          model: ResponseModel,
+          as: 'responses',
+          include: [{ model: Question, as: 'question', attributes: ['id', 'questionText', 'section', 'sectionTitle'] }]
+        }
+      ]
+    });
+
+    if (!appraisal) {
+      res.status(HTTP_STATUS.NOT_FOUND).json({ success: false, message: ERROR_MESSAGES.APPRAISAL_NOT_FOUND });
+      return;
+    }
+
+    // Return cached unless force=true
+    const force = req.query.force === 'true';
+    if (appraisal.aiSummary && !force) {
+      res.status(HTTP_STATUS.OK).json({ success: true, data: appraisal.aiSummary });
+      return;
+    }
+
+    const responses = (appraisal as any).responses ?? [];
+    const answeredResponses = responses.filter((r: any) => r.answer && r.answer.replace(/<[^>]+>/g, '').trim().length > 0);
+    if (answeredResponses.length === 0) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'No answers found. The appraisee has not filled in any answers yet.' });
+      return;
+    }
+
+    // Group responses by section
+    const sections: Record<string, { title: string; qas: Array<{ q: string; a: string }> }> = {};
+    for (const r of answeredResponses) {
+      const q = r.question;
+      if (!q) continue;
+      const key = q.section ?? 'general';
+      if (!sections[key]) sections[key] = { title: q.sectionTitle ?? key, qas: [] };
+      const plainAnswer = (r.answer ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (plainAnswer) sections[key].qas.push({ q: q.questionText, a: plainAnswer });
+    }
+
+    const assessmentText = Object.values(sections)
+      .filter((s) => s.qas.length > 0)
+      .map((s) => {
+        const lines = s.qas.map((qa) => `Q: ${qa.q}\nA: ${qa.a}`).join('\n\n');
+        return `Section: ${s.title}\n${lines}`;
+      })
+      .join('\n\n---\n\n');
+
+    const appraiseeUser = (appraisal as any).user;
+    const prompt = `You are reviewing a self-assessment for ${appraiseeUser?.name ?? 'an employee'} (${appraiseeUser?.role ?? 'unknown role'}), ${appraisal.year} appraisal.\nSummarise their answers in 4 short paragraphs:\n1. Key achievements & impact\n2. Technical/professional strengths\n3. Areas for growth\n4. Overall impression\nKeep it factual, concise, and under 250 words.\n\n--- Self-Assessment ---\n${assessmentText}`;
+
+    const client = new AnthropicBedrock({
+      awsRegion: process.env.AWS_REGION,
+      awsAccessKey: process.env.AWS_ACCESS_KEY_ID,
+      awsSecretKey: process.env.AWS_SECRET_ACCESS_KEY,
+      awsSessionToken: process.env.AWS_SESSION_TOKEN,
+    } as any);
+    const message = await client.messages.create({
+      model: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const summaryBlock = message.content.find((b) => b.type === 'text');
+    const summary = summaryBlock?.type === 'text' ? summaryBlock.text.trim() : '';
+
+    appraisal.aiSummary = summary;
+    await appraisal.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, data: summary });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Generate summary error:', msg);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: `Error generating summary: ${msg}` });
+  }
+};
+
 export default {
   getAllAppraisals,
   getAppraisalById,
@@ -854,7 +1642,16 @@ export default {
   updateAppraisal,
   submitAppraisal,
   saveReviewerRatings,
+  saveManagerFeedback,
+  bulkCreateAppraisals,
+  returnAppraisal,
+  exportAppraisals,
   addComment,
   getComments,
-  deleteAppraisal
+  deleteAppraisal,
+  getPeerFeedback,
+  addPeerFeedback,
+  updatePeerFeedback,
+  deletePeerFeedback,
+  generateSummary
 };

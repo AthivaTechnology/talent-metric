@@ -6,6 +6,7 @@ import LoadingSpinner from '@components/common/LoadingSpinner';
 
 // Pages
 import LoginPage from '@pages/LoginPage';
+import AcceptInvitePage from '@pages/AcceptInvitePage';
 import DashboardPage from '@pages/DashboardPage';
 import AppraisalsPage from '@pages/AppraisalsPage';
 import AppraisalDetailPage from '@pages/AppraisalDetailPage';
@@ -14,6 +15,7 @@ import ProfilePage from '@pages/ProfilePage';
 import TeamPage from '@pages/TeamPage';
 import AnalyticsPage from '@pages/AnalyticsPage';
 import UserManualPage from '@pages/UserManualPage';
+import PeerFeedbackPage from '@pages/PeerFeedbackPage';
 
 export default function App() {
   const { isLoading } = useAuth();
@@ -26,6 +28,7 @@ export default function App() {
     <Routes>
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
       {/* Protected — layout wrapper */}
       <Route
@@ -63,6 +66,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/peer-feedback" element={<PeerFeedbackPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/user-manual" element={<UserManualPage />} />
       </Route>

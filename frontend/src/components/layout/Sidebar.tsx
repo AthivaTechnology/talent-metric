@@ -7,6 +7,7 @@ import {
   UserGroupIcon,
   ChartBarIcon,
   BookOpenIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@context/AuthContext';
 import type { UserRole } from '@/types/index';
@@ -28,6 +29,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Appraisals',
     to: '/appraisals',
     icon: ClipboardDocumentListIcon,
+  },
+  {
+    label: 'Peer Feedback',
+    to: '/peer-feedback',
+    icon: ChatBubbleLeftRightIcon,
   },
   {
     label: 'Team',

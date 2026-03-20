@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, getMe, logout, changePassword } from '../controllers/authController';
+import { login, getMe, logout, changePassword, verifyInvite, acceptInvite } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
@@ -31,5 +31,19 @@ router.post('/logout', authenticate, logout);
  * @access  Private
  */
 router.put('/change-password', authenticate, changePassword);
+
+/**
+ * @route   GET /api/auth/verify-invite/:token
+ * @desc    Verify invitation token
+ * @access  Public
+ */
+router.get('/verify-invite/:token', verifyInvite);
+
+/**
+ * @route   POST /api/auth/accept-invite
+ * @desc    Accept invite and set password
+ * @access  Public
+ */
+router.post('/accept-invite', acceptInvite);
 
 export default router;
