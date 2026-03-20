@@ -1,4 +1,4 @@
-name: Talent Metric CI/CD Pipeline
+name: Talent Metric CI/CD Pipeline.
 
 on:
   workflow_dispatch:
