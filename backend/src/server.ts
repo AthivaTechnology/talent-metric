@@ -21,6 +21,10 @@ dotenv.config();
 // Initialize Express app
 const app: Application = express();
 
+// Trust proxy — required when running behind a load balancer/reverse proxy (e.g. AWS ALB, ECS, nginx)
+// so that express-rate-limit can correctly identify client IPs from X-Forwarded-For
+app.set('trust proxy', 1);
+
 // Port
 const PORT = process.env.PORT || 5000;
 

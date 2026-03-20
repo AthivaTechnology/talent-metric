@@ -1153,12 +1153,22 @@ export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Pro
         await ResponseModel.bulkCreate(questions.map(q => ({ appraisalId: appraisal.id, questionId: q.id, answer: '' })));
       }
 
+      let invitationToken: string | undefined;
+      if (!user.password) {
+        invitationToken = crypto.randomBytes(32).toString('hex');
+        await user.update({
+          invitationToken,
+          invitationTokenExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        });
+      }
+
       notifyAppraiseeOnOpen({
         appraiseeEmail: user.email,
         appraiseeName: user.name,
         appraisalId: appraisal.id,
         year: appraisal.year,
-        deadline: appraisal.deadline
+        deadline: appraisal.deadline,
+        invitationToken
       });
 
       created++;
