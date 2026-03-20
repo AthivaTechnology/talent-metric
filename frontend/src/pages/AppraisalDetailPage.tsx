@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -129,7 +129,10 @@ function AnswerEditor({ questionId, questionText, initialValue, onChange }: Answ
   return (
     <div className="space-y-2">
       <p className="text-sm font-medium text-slate-800">{questionText}</p>
-      <div className="border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent overflow-hidden">
+      <div
+        className="border border-slate-300 rounded-lg focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent overflow-hidden cursor-text"
+        onClick={() => editor?.commands.focus()}
+      >
         <EditorToolbar editor={editor} />
         <EditorContent
           editor={editor}
@@ -317,6 +320,13 @@ export default function AppraisalDetailPage() {
 
   const appraisal = appraisalQuery.data;
   const sections: QuestionSection[] = questionsQuery.data ?? [];
+
+  // Which sections have at least one unanswered question (only relevant when developer can edit)
+  const hasText = (html: string | undefined) => !!html && html.replace(/<[^>]*>/g, '').trim().length > 0;
+  const incompleteSections = useMemo(
+    () => new Set(sections.filter((sec) => sec.questions.some((q) => !hasText(answers[q.id]))).map((sec) => sec.section)),
+    [sections, answers]
+  );
 
   // Clear the cache on unmount so navigating back always fetches fresh data from the server.
   // Without this, React Query serves the stale cache immediately on remount (isFetching=false
@@ -749,20 +759,30 @@ export default function AppraisalDetailPage() {
           {/* Section tabs */}
           {sections.length > 0 && (
             <div className="flex gap-2 flex-wrap">
-              {sections.map((sec, idx) => (
-                <button
-                  key={sec.section}
-                  onClick={() => setActiveSection(idx)}
-                  className={clsx(
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-                    activeSection === idx
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
-                  )}
-                >
-                  {sec.sectionTitle}
-                </button>
-              ))}
+              {sections.map((sec, idx) => {
+                const isIncomplete = canEdit && incompleteSections.has(sec.section);
+                const isComplete = canEdit && !incompleteSections.has(sec.section);
+                return (
+                  <button
+                    key={sec.section}
+                    onClick={() => setActiveSection(idx)}
+                    className={clsx(
+                      'relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                      activeSection === idx
+                        ? 'bg-indigo-600 text-white'
+                        : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-50'
+                    )}
+                  >
+                    {sec.sectionTitle}
+                    {isIncomplete && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+                    )}
+                    {isComplete && (
+                      <CheckCircleIcon className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 text-green-500 bg-white rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -777,7 +797,7 @@ export default function AppraisalDetailPage() {
               </div>
               <div className="card-body space-y-6">
                 {sec.questions.map((q) => (
-                  <div key={q.id}>
+                  <div key={q.id} data-question-id={q.id}>
                     {canEdit ? (
                       <AnswerEditor
                         questionId={q.id}
@@ -1089,6 +1109,25 @@ export default function AppraisalDetailPage() {
                 <>
                   <button
                     onClick={() => {
+                      if (canEdit && incompleteSections.size > 0) {
+                        const firstIncompleteSection = sections.find((s) => incompleteSections.has(s.section));
+                        const firstIncompleteIdx = sections.indexOf(firstIncompleteSection!);
+                        setActiveSection(firstIncompleteIdx);
+                        toast.error('Please answer all questions before submitting');
+                        // After section renders, scroll to and focus the first unanswered question
+                        setTimeout(() => {
+                          const firstEmptyQ = firstIncompleteSection?.questions.find((q) => !hasText(answers[q.id]));
+                          if (firstEmptyQ) {
+                            const el = document.querySelector(`[data-question-id="${firstEmptyQ.id}"]`);
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              const contentEditable = el.querySelector('[contenteditable]') as HTMLElement | null;
+                              contentEditable?.focus();
+                            }
+                          }
+                        }, 50);
+                        return;
+                      }
                       if (canEdit) {
                         // Save first, then submit
                         saveMutation
