@@ -13,6 +13,7 @@ import {
   PaperAirplaneIcon,
   ArrowUturnLeftIcon,
   SparklesIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import { appraisalService } from '@services/appraisalService';
 import { getErrorMessage } from '@services/api';
@@ -315,6 +316,12 @@ export default function AppraisalDetailPage() {
     ['appraisal-comments', id],
     () => appraisalService.getComments(id!),
     { enabled: !!id }
+  );
+
+  const peerFeedbackQuery = useQuery(
+    ['appraisal-peer-feedback', id],
+    () => appraisalService.getPeerFeedback(id!),
+    { enabled: !!id && user?.role === 'manager' }
   );
 
 
@@ -1178,6 +1185,44 @@ export default function AppraisalDetailPage() {
                 <p className="text-sm font-medium text-slate-900 truncate">{appraisal.user.name}</p>
                 <p className="text-xs text-slate-500 truncate" title={appraisal.user.email}>{appraisal.user.email}</p>
                 <p className="text-xs text-slate-400 capitalize">{appraisal.user.role?.replace('_', ' ')}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Peer Feedback — managers only */}
+          {user?.role === 'manager' && (
+            <div className="card">
+              <div className="card-header flex items-center gap-2">
+                <UserGroupIcon className="w-4 h-4 text-slate-400" />
+                <h3 className="text-sm font-semibold text-slate-900">Peer Feedback</h3>
+                {peerFeedbackQuery.data && peerFeedbackQuery.data.length > 0 && (
+                  <span className="ml-auto text-xs text-slate-400">{peerFeedbackQuery.data.length} response{peerFeedbackQuery.data.length !== 1 ? 's' : ''}</span>
+                )}
+              </div>
+              <div className="card-body space-y-4">
+                {peerFeedbackQuery.isLoading ? (
+                  <LoadingSpinner size="sm" />
+                ) : !peerFeedbackQuery.data || peerFeedbackQuery.data.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4">No peer feedback submitted yet.</p>
+                ) : (
+                  <div className="space-y-4 max-h-80 overflow-y-auto">
+                    {peerFeedbackQuery.data.map((fb) => (
+                      <div key={fb.id} className="space-y-2 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
+                        <p className="text-xs font-medium text-slate-500 capitalize">{fb.giver?.name} · {fb.giver?.role?.replace('_', ' ')}</p>
+                        <div>
+                          <p className="text-xs font-semibold text-green-700 mb-0.5">What they did well</p>
+                          <p className="text-xs text-slate-700 whitespace-pre-wrap">{fb.didWell}</p>
+                        </div>
+                        {fb.canImprove && (
+                          <div>
+                            <p className="text-xs font-semibold text-amber-700 mb-0.5">Can improve</p>
+                            <p className="text-xs text-slate-700 whitespace-pre-wrap">{fb.canImprove}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
