@@ -490,11 +490,13 @@ export const submitAppraisal = async (req: AuthRequest, res: Response): Promise<
     // Fetch the appraisee to check their role for skip logic
     const appraiseeUser = await User.findByPk(appraisal.userId);
 
-    // Tech leads and managers skip the tech_lead_review stage for their own appraisals
+    // Skip tech_lead_review if: appraisee is a tech lead/manager, or has no tech lead assigned
     const skipTechLeadReview =
       currentStatus === APPRAISAL_STATUS.DRAFT &&
       appraiseeUser &&
-      (appraiseeUser.role === USER_ROLES.TECH_LEAD || appraiseeUser.role === USER_ROLES.MANAGER);
+      (appraiseeUser.role === USER_ROLES.TECH_LEAD ||
+        appraiseeUser.role === USER_ROLES.MANAGER ||
+        !appraiseeUser.techLeadId);
     if (skipTechLeadReview) {
       nextStatus = APPRAISAL_STATUS.MANAGER_REVIEW;
     }

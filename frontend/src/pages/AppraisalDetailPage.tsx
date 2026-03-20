@@ -1174,9 +1174,9 @@ export default function AppraisalDetailPage() {
               <div className="card-header">
                 <h3 className="text-sm font-semibold text-slate-900">Appraisee</h3>
               </div>
-              <div className="card-body space-y-1">
-                <p className="text-sm font-medium text-slate-900">{appraisal.user.name}</p>
-                <p className="text-xs text-slate-500">{appraisal.user.email}</p>
+              <div className="card-body space-y-1 min-w-0">
+                <p className="text-sm font-medium text-slate-900 truncate">{appraisal.user.name}</p>
+                <p className="text-xs text-slate-500 truncate" title={appraisal.user.email}>{appraisal.user.email}</p>
                 <p className="text-xs text-slate-400 capitalize">{appraisal.user.role?.replace('_', ' ')}</p>
               </div>
             </div>
