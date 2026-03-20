@@ -1,9 +1,11 @@
 import { Response } from 'express';
+import crypto from 'crypto';
 import { AuthRequest } from '../middleware/auth';
 import User from '../models/User';
 import { generateToken } from '../utils/jwt';
 import { HTTP_STATUS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../config/constants';
 import { Op } from 'sequelize';
+import { sendPasswordResetEmail } from '../services/emailService';
 
 /**
  * @desc    Login user
@@ -346,6 +348,79 @@ export const acceptInvite = async (req: AuthRequest, res: Response): Promise<voi
       success: false,
       message: 'Error accepting invite'
     });
+  }
+};
+
+/**
+ * @desc    Request password reset — sends email with reset link
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Email is required' });
+      return;
+    }
+
+    const user = await User.findOne({ where: { email } });
+
+    // Always respond with success to prevent email enumeration
+    if (!user) {
+      res.status(HTTP_STATUS.OK).json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+      return;
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    user.invitationToken = token;
+    user.invitationTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    await sendPasswordResetEmail({ email: user.email, name: user.name, token });
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'If that email exists, a reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error processing request' });
+  }
+};
+
+/**
+ * @desc    Reset password using token
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Token and password are required' });
+      return;
+    }
+    if (password.length < 6) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    const user = await User.findOne({
+      where: { invitationToken: token, invitationTokenExpiry: { [Op.gt]: new Date() } }
+    });
+
+    if (!user) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({ success: false, message: 'Reset link is invalid or has expired.' });
+      return;
+    }
+
+    user.password = password;
+    user.invitationToken = null;
+    user.invitationTokenExpiry = null;
+    await user.save();
+
+    res.status(HTTP_STATUS.OK).json({ success: true, message: 'Password reset successfully. You can now log in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ success: false, message: 'Error resetting password' });
   }
 };
 

@@ -44,14 +44,15 @@ export default function StarRating({
           onMouseEnter={() => !readonly && setHovered(star)}
           onMouseLeave={() => !readonly && setHovered(0)}
           className={clsx(
-            'transition-transform duration-100',
-            !readonly && 'cursor-pointer hover:scale-110 focus:outline-none',
+            !readonly && 'cursor-pointer focus:outline-none',
             readonly && 'cursor-default'
           )}
         >
           <svg
             className={clsx(
               sizeClasses[size],
+              'transition-transform duration-100',
+              !readonly && hovered === star && 'scale-110',
               star <= displayed ? filledClass : 'text-slate-300 fill-slate-300'
             )}
             viewBox="0 0 20 20"

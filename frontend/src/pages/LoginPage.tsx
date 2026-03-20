@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '@context/AuthContext';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@services/api';
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
+  const successMessage = (location.state as { message?: string })?.message;
 
   if (isAuthenticated) {
     return <Navigate to={from} replace />;
@@ -85,6 +86,12 @@ export default function LoginPage() {
             <p className="text-slate-500 mt-2">Enter your credentials to continue</p>
           </div>
 
+          {successMessage && (
+            <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+              {successMessage}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="label">
@@ -104,9 +111,10 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="label">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="password" className="label !mb-0">Password</label>
+                <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline">Forgot password?</Link>
+              </div>
               <div className="relative">
                 <input
                   id="password"
