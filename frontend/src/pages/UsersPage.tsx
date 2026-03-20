@@ -371,7 +371,7 @@ function UserModal({ user, onClose, onSaved }: UserModalProps) {
   );
 
   const showTechLead = role === 'developer' || role === 'tester' || role === 'devops';
-  const showManager = role === 'developer' || role === 'tester' || role === 'devops' || role === 'tech_lead';
+  const showManager = role === 'developer' || role === 'tester' || role === 'devops' || role === 'tech_lead' || role === 'manager';
 
   return (
     <Dialog open onClose={onClose} className="relative z-50">

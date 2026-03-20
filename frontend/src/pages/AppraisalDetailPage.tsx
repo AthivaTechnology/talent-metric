@@ -1069,8 +1069,8 @@ export default function AppraisalDetailPage() {
             <div className="card-body space-y-3">
               <div className="space-y-2">
                 {(skipsTechLeadReview
-                    ? (['draft', 'manager_review', 'completed'] as const)
-                    : (['draft', 'tech_lead_review', 'manager_review', 'completed'] as const))
+                    ? (['draft', 'manager_review'] as const)
+                    : (['draft', 'tech_lead_review', 'manager_review'] as const))
                   .map((stage) => {
                     const orderedStages = skipsTechLeadReview
                       ? ['draft', 'manager_review', 'completed']
