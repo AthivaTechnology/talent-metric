@@ -50,8 +50,8 @@ export const getAllAppraisals = async (req: AuthRequest, res: Response): Promise
     }
 
     // Role-based filtering
-    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
-      // Developers and testers can only see their own appraisals
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER || req.user.role === USER_ROLES.ADMIN) {
+      // Developers, testers and admins can only see their own appraisals
       whereClause.userId = req.user.id;
     } else if (req.user.role === USER_ROLES.TECH_LEAD) {
       // Tech leads can see their own appraisal + their team members' appraisals
@@ -70,7 +70,6 @@ export const getAllAppraisals = async (req: AuthRequest, res: Response): Promise
       const reporteeIds = reportees.map(reportee => reportee.id);
       whereClause.userId = { [Op.in]: [req.user.id, ...reporteeIds] };
     }
-    // Admins can see all appraisals (no additional filtering)
 
     const offset = (Number(page) - 1) * Number(limit);
 
@@ -259,6 +258,15 @@ export const createAppraisal = async (req: AuthRequest, res: Response): Promise<
       res.status(HTTP_STATUS.NOT_FOUND).json({
         success: false,
         message: ERROR_MESSAGES.USER_NOT_FOUND
+      });
+      return;
+    }
+
+    // Managers without a manager assigned cannot have an appraisal
+    if (user.role === USER_ROLES.MANAGER && !user.managerId) {
+      res.status(HTTP_STATUS.BAD_REQUEST).json({
+        success: false,
+        message: 'Cannot create appraisal for a manager who has no manager assigned'
       });
       return;
     }
@@ -1009,11 +1017,6 @@ const checkAppraisalAccess = async (
   user: { id: number; role: string },
   appraisal: Appraisal
 ): Promise<boolean> => {
-  // Admin can access all
-  if (user.role === USER_ROLES.ADMIN) {
-    return true;
-  }
-
   // User can access their own
   if (appraisal.userId === user.id) {
     return true;
@@ -1140,6 +1143,9 @@ export const bulkCreateAppraisals = async (req: AuthRequest, res: Response): Pro
     let created = 0;
     for (const user of users) {
       if (existingUserIds.has(user.id)) continue;
+
+      // Skip managers who have no manager assigned
+      if (user.role === USER_ROLES.MANAGER && !user.managerId) continue;
 
       const appraisal = await Appraisal.create({
         userId: user.id,
