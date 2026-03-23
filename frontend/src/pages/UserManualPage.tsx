@@ -96,15 +96,16 @@ export default function UserManualPage() {
 
       {/* Getting Started */}
       <Section id="getting-started" title="Getting Started" icon={CogIcon}>
-        <h4 className="font-semibold text-slate-900 mb-2">Logging In</h4>
+        <h4 className="font-semibold text-slate-900 mb-2">First-Time Login (Invite Flow)</h4>
         <ol className="list-decimal list-inside text-slate-600 space-y-1 mb-4">
-          <li>Open your web browser and navigate to the application URL</li>
-          <li>Enter your Email Address and Password</li>
-          <li>Click the Login button</li>
+          <li>When your appraisal is opened, you'll receive an email with a <strong>Set Password &amp; Start Appraisal</strong> link</li>
+          <li>Click the link to set your password — the link is valid for <strong>30 days</strong></li>
+          <li>After setting your password, you'll be taken directly to your appraisal</li>
+          <li>For future logins, navigate to the app URL and sign in with your email and password</li>
         </ol>
-        <div className="bg-slate-50 rounded-lg p-4 mb-4">
-          <p className="text-sm text-slate-600">
-            <strong>Default Credentials:</strong> admin@company.com / Admin@123
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+          <p className="text-sm text-amber-800">
+            <strong>Note:</strong> Interns are not part of the appraisal process and will not receive an invite.
           </p>
         </div>
         <h4 className="font-semibold text-slate-900 mb-2">Password Requirements</h4>
@@ -132,19 +133,29 @@ export default function UserManualPage() {
                 <td className="px-4 py-3 text-slate-600">Fill appraisals, view own status</td>
               </tr>
               <tr>
+                <td className="px-4 py-3 font-medium text-slate-900">Tester</td>
+                <td className="px-4 py-3 text-slate-600">QA team members — same workflow as Developers</td>
+                <td className="px-4 py-3 text-slate-600">Fill appraisals, view own status</td>
+              </tr>
+              <tr>
+                <td className="px-4 py-3 font-medium text-slate-900">DevOps</td>
+                <td className="px-4 py-3 text-slate-600">DevOps engineers — same workflow as Developers</td>
+                <td className="px-4 py-3 text-slate-600">Fill appraisals, view own status</td>
+              </tr>
+              <tr>
                 <td className="px-4 py-3 font-medium text-slate-900">Tech Lead</td>
-                <td className="px-4 py-3 text-slate-600">Senior developers who review team members</td>
-                <td className="px-4 py-3 text-slate-600">Review team appraisals, add feedback</td>
+                <td className="px-4 py-3 text-slate-600">Senior developers who review their team's appraisals</td>
+                <td className="px-4 py-3 text-slate-600">Review team appraisals, add feedback, own appraisal</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 font-medium text-slate-900">Manager</td>
                 <td className="px-4 py-3 text-slate-600">Team managers who finalize reviews</td>
-                <td className="px-4 py-3 text-slate-600">Final review, complete appraisals, view analytics</td>
+                <td className="px-4 py-3 text-slate-600">Final review, complete appraisals, view analytics, own appraisal</td>
               </tr>
               <tr>
                 <td className="px-4 py-3 font-medium text-slate-900">Admin</td>
                 <td className="px-4 py-3 text-slate-600">System administrators</td>
-                <td className="px-4 py-3 text-slate-600">Full access, user management, system settings</td>
+                <td className="px-4 py-3 text-slate-600">User management, bulk create appraisals, view appraisal list (not detail)</td>
               </tr>
             </tbody>
           </table>
@@ -274,12 +285,22 @@ export default function UserManualPage() {
           <li>Edit user details, roles, and team assignments</li>
           <li>Deactivate users who have left the organization</li>
         </ul>
-        <h4 className="font-semibold text-slate-900 mb-2">System Settings</h4>
+        <h4 className="font-semibold text-slate-900 mb-2">Opening Appraisals</h4>
+        <ul className="list-disc list-inside text-slate-600 space-y-1 mb-4">
+          <li>Use <strong>Bulk Create</strong> on the Appraisals page to open appraisals for all eligible users at once</li>
+          <li>Users without a password will automatically receive a <strong>Set Password &amp; Start Appraisal</strong> invite email</li>
+          <li>Managers without a manager assigned above them are excluded from the appraisal cycle</li>
+          <li>Interns are not included in the appraisal process</li>
+        </ul>
+        <h4 className="font-semibold text-slate-900 mb-2">Admin Appraisal Access</h4>
+        <ul className="list-disc list-inside text-slate-600 space-y-1 mb-4">
+          <li>Admins can view the full list of all appraisals across the organisation</li>
+          <li>Admins cannot open the detail view of another user's appraisal</li>
+        </ul>
+        <h4 className="font-semibold text-slate-900 mb-2">Other Actions</h4>
         <ul className="list-disc list-inside text-slate-600 space-y-1">
-          <li>Configure appraisal deadlines</li>
-          <li>Manage appraisal cycles and years</li>
-          <li>Export appraisal data for reporting</li>
-          <li>View system-wide analytics</li>
+          <li>Configure appraisal deadlines and set the year</li>
+          <li>Export appraisal data as CSV for reporting</li>
         </ul>
       </Section>
 
@@ -301,7 +322,7 @@ export default function UserManualPage() {
           <div>
             <h4 className="font-semibold text-slate-900 mb-1">Who can see my appraisal?</h4>
             <p className="text-slate-600">
-              Your appraisal is visible to you, your assigned Tech Lead, your Manager, and system Admins.
+              Your appraisal detail is visible to you, your assigned Tech Lead, and your Manager. Admins can see the appraisal list overview but cannot open individual appraisal details.
             </p>
           </div>
           <div>
