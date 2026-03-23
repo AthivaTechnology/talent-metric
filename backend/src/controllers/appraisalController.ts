@@ -50,8 +50,8 @@ export const getAllAppraisals = async (req: AuthRequest, res: Response): Promise
     }
 
     // Role-based filtering
-    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER || req.user.role === USER_ROLES.ADMIN) {
-      // Developers, testers and admins can only see their own appraisals
+    if (req.user.role === USER_ROLES.DEVELOPER || req.user.role === USER_ROLES.TESTER) {
+      // Developers and testers can only see their own appraisals
       whereClause.userId = req.user.id;
     } else if (req.user.role === USER_ROLES.TECH_LEAD) {
       // Tech leads can see their own appraisal + their team members' appraisals
