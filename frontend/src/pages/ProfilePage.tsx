@@ -11,6 +11,7 @@ import type { UserRole } from '@/types/index';
 
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700',
+  hr: 'bg-pink-100 text-pink-700',
   manager: 'bg-purple-100 text-purple-700',
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
@@ -20,6 +21,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   admin: 'Full system access — manage users, create appraisals, view all data.',
+  hr: 'View all appraisals across the org, export data, and manage users.',
   manager: 'Review and finalize appraisals for your team members.',
   tech_lead: 'Review appraisals for your technical team members.',
   developer: 'Submit and track your own performance appraisals.',
