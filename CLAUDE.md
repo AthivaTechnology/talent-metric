@@ -59,11 +59,19 @@ docker-compose up -d   # Start MySQL via Docker (recommended for local dev)
 - **Charts**: Recharts for analytics pages
 
 ### Role System
-- Roles: `admin`, `manager`, `tech_lead`, `developer`, `tester`
+- Roles: `admin`, `hr`, `manager`, `tech_lead`, `developer`, `tester`, `devops`
 - Testers behave like developers in the workflow (fill → tech lead review → manager review → complete)
 - Tech leads and managers can have their own appraisals; they can see those alongside their team's
 - Role-specific questions are stored in DB with `applicableRole` field; `GET /api/questions?role=<role>` returns only that role's questions
 - Rating categories differ per role — defined in `ROLE_RATING_CONFIGS` in `frontend/src/types/index.ts` and `ROLE_RATING_CATEGORIES` in `backend/src/config/constants.ts`
+
+### Appraisal Access by Role
+Enforced in `backend/src/controllers/appraisalController.ts` via `checkAppraisalAccess()`:
+- **admin**: Cannot view individual appraisals (not included in `checkAppraisalAccess`). Can manage users (`/users`) and view analytics.
+- **hr**: Can view ALL appraisals across the org. Can export, view analytics, manage users. Does not participate in the appraisal workflow (cannot create appraisals).
+- **manager**: Own appraisal + direct reportees (users where `managerId = manager.id`)
+- **tech_lead**: Own appraisal + team members (users where `techLeadId = techLead.id`)
+- **developer / tester / devops**: Own appraisal only
 
 ### Key Route → Page Mapping
 | Route | Page | Role Restriction |

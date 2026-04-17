@@ -106,12 +106,12 @@ export const authorize = (...allowedRoles: UserRole[]) => {
 /**
  * Middleware to check if user is admin
  */
-export const isAdmin = authorize(USER_ROLES.ADMIN);
+export const isAdmin = authorize(USER_ROLES.ADMIN, USER_ROLES.HR);
 
 /**
  * Middleware to check if user is manager or admin
  */
-export const isManagerOrAdmin = authorize(USER_ROLES.MANAGER, USER_ROLES.ADMIN);
+export const isManagerOrAdmin = authorize(USER_ROLES.MANAGER, USER_ROLES.ADMIN, USER_ROLES.HR);
 
 /**
  * Middleware to check if user is tech lead, manager, or admin
@@ -119,7 +119,8 @@ export const isManagerOrAdmin = authorize(USER_ROLES.MANAGER, USER_ROLES.ADMIN);
 export const isTechLeadOrAbove = authorize(
   USER_ROLES.TECH_LEAD,
   USER_ROLES.MANAGER,
-  USER_ROLES.ADMIN
+  USER_ROLES.ADMIN,
+  USER_ROLES.HR
 );
 
 /**
@@ -143,8 +144,8 @@ export const canAccessAppraisal = async (
     const currentUserId = req.user.id;
     const currentUserRole = req.user.role;
 
-    // Admin can access all appraisals
-    if (currentUserRole === USER_ROLES.ADMIN) {
+    // Admin and HR can access all appraisals
+    if (currentUserRole === USER_ROLES.ADMIN || currentUserRole === USER_ROLES.HR) {
       next();
       return;
     }

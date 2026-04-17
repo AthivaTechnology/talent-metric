@@ -23,7 +23,7 @@ export const getDashboardStats = async (req: AuthRequest, res: Response): Promis
     const currentYear = new Date().getFullYear();
     const stats: any = {};
 
-    if (req.user.role === USER_ROLES.ADMIN) {
+    if (req.user.role === USER_ROLES.ADMIN || req.user.role === USER_ROLES.HR) {
       // Admin stats - all users
       stats.totalUsers = await User.count();
       stats.totalDevelopers = await User.count({ where: { role: USER_ROLES.DEVELOPER } });
@@ -193,8 +193,8 @@ export const getTeamAppraisals = async (req: AuthRequest, res: Response): Promis
         attributes: ['id']
       });
       userIds = teamMembers.map(m => m.id);
-    } else if (req.user.role === USER_ROLES.ADMIN) {
-      // Admin can see all non-admin users
+    } else if (req.user.role === USER_ROLES.ADMIN || req.user.role === USER_ROLES.HR) {
+      // Admin/HR can see all non-admin users
       const allUsers = await User.findAll({
         where: {
           role: { [Op.in]: [USER_ROLES.DEVELOPER, USER_ROLES.TESTER, USER_ROLES.DEVOPS, USER_ROLES.TECH_LEAD, USER_ROLES.MANAGER] }
@@ -260,7 +260,8 @@ export const getTeamAnalytics = async (req: AuthRequest, res: Response): Promise
     if (
       req.user.role !== USER_ROLES.MANAGER &&
       req.user.role !== USER_ROLES.ADMIN &&
-      req.user.role !== USER_ROLES.TECH_LEAD
+      req.user.role !== USER_ROLES.TECH_LEAD &&
+      req.user.role !== USER_ROLES.HR
     ) {
       res.status(HTTP_STATUS.FORBIDDEN).json({
         success: false,

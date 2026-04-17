@@ -70,7 +70,7 @@ export default function AppraisalsPage() {
   );
 
   const canCreate = user && ROLES_THAT_CAN_CREATE.includes(user.role);
-  const canExport = user && ['admin', 'manager', 'tech_lead'].includes(user.role);
+  const canExport = user && ['admin', 'hr', 'manager', 'tech_lead'].includes(user.role);
 
   const handleExport = async () => {
     try {

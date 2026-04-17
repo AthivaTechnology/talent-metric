@@ -45,13 +45,13 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Analytics',
     to: '/analytics',
     icon: ChartBarIcon,
-    roles: ['admin', 'manager', 'tech_lead'],
+    roles: ['admin', 'hr', 'manager', 'tech_lead'],
   },
   {
     label: 'Users',
     to: '/users',
     icon: UsersIcon,
-    roles: ['admin'],
+    roles: ['admin', 'hr'],
   },
   {
     label: 'User Manual',
