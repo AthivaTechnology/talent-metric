@@ -24,11 +24,13 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'devops', label: 'DevOps' },
   { value: 'tech_lead', label: 'Tech Lead' },
   { value: 'manager', label: 'Manager' },
+  { value: 'hr', label: 'HR' },
   { value: 'admin', label: 'Admin' },
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {
   admin: 'bg-red-100 text-red-700',
+  hr: 'bg-pink-100 text-pink-700',
   manager: 'bg-purple-100 text-purple-700',
   tech_lead: 'bg-blue-100 text-blue-700',
   developer: 'bg-green-100 text-green-700',
