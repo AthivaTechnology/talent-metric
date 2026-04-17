@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'tech_lead' | 'developer' | 'tester' | 'devops';
+export type UserRole = 'admin' | 'hr' | 'manager' | 'tech_lead' | 'developer' | 'tester' | 'devops';
 
 export type AppraisalStatus =
   | 'draft'

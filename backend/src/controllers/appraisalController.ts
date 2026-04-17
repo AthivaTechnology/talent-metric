@@ -1017,6 +1017,11 @@ const checkAppraisalAccess = async (
   user: { id: number; role: string },
   appraisal: Appraisal
 ): Promise<boolean> => {
+  // HR can access all appraisals
+  if (user.role === USER_ROLES.HR) {
+    return true;
+  }
+
   // User can access their own
   if (appraisal.userId === user.id) {
     return true;
